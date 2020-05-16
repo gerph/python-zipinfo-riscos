@@ -6,8 +6,8 @@ RISC OS extra fields in this ZipInfo are extractable using the ZipInfoRISCOS obj
 This object provides 
 """
 
-
 import struct
+import sys
 import zipfile
 
 
@@ -109,8 +109,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             # If the implmentation changes, more consideration to reading the source
             # object will be required.
             for field in zipinfo.__class__.__slots__:
-                if field == 'extra':
-                    setattr(self, field, getattr(zipinfo, field))
+                if field != 'extra':
+                    setattr(self, field, getattr(zipinfo, field, None))
             # Always populate the extra field last, as this modifies the existing fields
             # based on what the RISC OS extra field contains
             self.extra = zipinfo.extra
