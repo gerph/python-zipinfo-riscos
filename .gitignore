@@ -1,1 +1,7 @@
 *.pyc
+
+# Test files
+nosetests.xml
+cover
+.coverage
+

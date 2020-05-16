@@ -6,9 +6,92 @@ RISC OS extra fields in this ZipInfo are extractable using the ZipInfoRISCOS obj
 This object provides 
 """
 
+import datetime
 import struct
 import sys
 import zipfile
+
+
+unix_epoch_to_riscos_epoch = int(int(70*365.25) * 24*60*60)
+datetime_epochtime = datetime.datetime(1970, 1, 1, tzinfo=None)
+
+
+def quin_to_epochtime(quin):
+    if not quin:
+        return None
+    return (quin / 100.0) - unix_epoch_to_riscos_epoch
+
+
+def quin_to_datetime(quin):
+    if not quin:
+        return None
+    return datetime.datetime.fromtimestamp(quin_to_epochtime(quin))
+
+
+def tuple_to_datetime(date_time_tuple):
+    """
+    Convert a broken down datetime to a quin (either zipinfo format or RISC OS format)
+    """
+    if len(date_time_tuple) == 6:
+        dt = datetime.datetime(date_time_tuple[0],
+                               date_time_tuple[1],
+                               date_time_tuple[2],
+                               date_time_tuple[3],
+                               date_time_tuple[4],
+                               date_time_tuple[5])
+    elif len(date_time_tuple) == 7:
+        dt = datetime.datetime(date_time_tuple[0],
+                               date_time_tuple[1],
+                               date_time_tuple[2],
+                               date_time_tuple[3],
+                               date_time_tuple[4],
+                               date_time_tuple[5],
+                               date_time_tuple[6] * 1000)
+    else:
+        dt = None
+    return dt
+
+
+def epochtime_to_quin(epochtime):
+    """
+    Return a quin for a given epoch time.
+    """
+    if epochtime is None:
+        return None
+    cstime = int(epochtime * 100)
+    quin = cstime + unix_epoch_to_riscos_epoch * 100
+    return quin
+
+
+def datetime_to_epochtime(dt):
+    if not dt:
+        return None
+    timestamp = (dt - datetime_epochtime).total_seconds()
+    return timestamp
+
+
+def datetime_to_quin(dt):
+    epochtime = datetime_to_epochtime(dt)
+    quin = epochtime_to_quin(epochtime)
+    return quin
+
+
+def loadexec_to_quin(loadexec=None, loadaddr=None, execaddr=None):
+    if loadexec:
+        loadaddr = loadexec[0]
+        execaddr = loadexec[0]
+    if loadaddr and (loadaddr & 0xFFF00000) == 0xFFF00000:
+        return ((loadaddr & 0xFF) << 32) | execaddr
+    return None
+
+
+def quin_to_loadexec(quin, filetype=0xFFF):
+    """
+    Return the load/exec for a given quin and filetype
+    """
+    loadaddr = ((quin >> 32) & 255) | 0xFFF00000 | (filetype << 8)
+    execaddr = (quin & 0xFFFFFFFF)
+    return (loadaddr, execaddr)
 
 
 class ZipInfoRISCOS(zipfile.ZipInfo):
@@ -79,7 +162,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     internal_attr_ebcdic = (1<<1)  # according to zipinfo
 
     _riscos_filename = None
-    _riscos_data_time = None
+    _riscos_date_time = None
     _riscos_objtype = None
     _riscos_loadaddr = None
     _riscos_execaddr = None
@@ -148,7 +231,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         value = self.build_extra_fields(chunks)
 
-        return self._extra
+        return value
 
     @extra.setter
     def extra(self, value):
@@ -224,13 +307,18 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         return b''.join(extra)
 
     def _update_date_time(self):
-        if self._riscos_loadaddr is not None and \
-           self._riscos_execaddr is not None and \
-           (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000:
-            # This is a RISC OS timestamped object, so we can update the date time
-            # FIXME: self.date_time =
-            # FIXME: self.riscos_data_time = 
-            pass
+        """
+        Update the date/time fields 
+        """
+        # This is a RISC OS timestamped object, so we can update the date time
+        quin = loadexec_to_quin(loadaddr=self.riscos_loadaddr,
+                                execaddr=self.riscos_execaddr)
+        dt = quin_to_datetime(quin)
+        if dt:
+            self.date_time = (dt.year, dt.month, dt.day,
+                              dt.hour, dt.minute, dt.second)
+            self.riscos_date_time = (dt.year, dt.month, dt.day,
+                                     dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
 
     def filetype_from_extension(self, ext):
         """
@@ -249,7 +337,6 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         return None
 
-
     def filetype_based_on_filename(self):
         """
         Work out the filetype from the filename (after mimemap)
@@ -265,14 +352,14 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if '/' in self.filename:
             dirname, _ = self.filename.rsplit('/')
             if '/' in dirname:
-                dirname, _ = path.split('/', 1)
+                dirname, _ = dirname.split('/', 1)
             filetype = self.filetype_parentdir_mappings.get(dirname.lower())
             if filetype is not None:
                 return filetype
 
         return None
 
-    ################ Filename
+    ################ NFS encoding setting
     @property
     def nfs_encoding(self):
         return self._nfs_encoding
@@ -299,18 +386,46 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     @property
     def riscos_date_time(self):
         # FIXME: Convert date_time object to RISC OS format
-        return self.date_time + [0]
+        if self._riscos_loadaddr is not None:
+            quin = loadexec_to_quin(self._riscos_loadaddr, self._riscos_execaddr or 0)
+            dt = quin_to_datetime(quin)
+
+            return (dt.year, dt.month, dt.day,
+                    dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
+
+        # Fall back to the standard format, with 0 for centiseconds
+        return tuple(list(self.date_time) + [0])
 
     @riscos_date_time.setter
     def riscos_date_time(self, value):
-        # FIXME: Convert timestamp from RISC OS format to format for zipfile
-        pass
+        # Convert timestamp from RISC OS format to format for zipfile
+        self._riscos_date_time = value
+        self.date_time = tuple(value[0:6])
+
+        # If they had load/exec set, we need to update it with the new timestamp.
+        if self._riscos_loadaddr is not None or \
+           self._riscos_execaddr is not None:
+
+            dt = tuple_to_datetime(value)
+            quin = datetime_to_quin(dt)
+            (self._riscos_loadaddr, self._riscos_execaddr) = quin_to_loadexec(quin, filetype=self.riscos_filetype)
 
     ################ Load address
     @property
     def riscos_loadaddr(self):
-        # FIXME: Convert time/filetype to RISC OS format
-        return self._riscos_loadaddr
+        # Convert time/filetype to RISC OS format
+        if self._riscos_loadaddr is not None:
+            # Load address exists.
+            if (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000:
+                # Can replace into the current load address
+                loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
+                return loadaddr
+
+        # No load address given; so we have to generate one from the date_time
+        dt = tuple_to_datetime(self.riscos_date_time)
+        quin = datetime_to_quin(dt)
+        (loadaddr, _) = quin_to_loadexec(quin, filetype=self.riscos_filetype)
+        return loadaddr
 
     @riscos_loadaddr.setter
     def riscos_loadaddr(self, value):
@@ -329,8 +444,16 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     ################ Exec address
     @property
     def riscos_execaddr(self):
-        # FIXME: Convert time/filetype to RISC OS format
-        return self._riscos_execaddr
+        # Convert time/filetype to RISC OS format
+        if self._riscos_execaddr is not None:
+            # Exec address exists.
+            return self._riscos_execaddr
+
+        # No exec address given; so we have to generate one from the date_time
+        dt = tuple_to_datetime(self.riscos_date_time)
+        quin = datetime_to_quin(dt)
+        (_, execaddr) = quin_to_loadexec(quin)
+        return execaddr
 
     @riscos_execaddr.setter
     def riscos_execaddr(self, value):
@@ -383,11 +506,16 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     @property
     def riscos_objtype(self):
         # FIXME: Convert information to RISC OS file type
-        return self._riscos_objtype
+        if self._riscos_objtype:
+            return self._riscos_objtype
+
+        if self.external_attr & self.external_attr_msdos_directory:
+            return 2;
+        return 1
 
     @riscos_objtype.setter
     def riscos_objtype(self, value):
-        # FIXME: Convert object type from RISC OS format to format for zipfile
+        # Convert object type from RISC OS format to format for zipfile
         if self._riscos_objtype == 2:
             if self._riscos_filetype is not None:
                 self._riscos_filetype = 0x1000
