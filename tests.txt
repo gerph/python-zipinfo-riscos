@@ -1,0 +1,17 @@
+#
+# SUT:    rozipinfo
+# Area:   ShowZip
+# Class:  Functional
+# Type:   Integration test
+#
+
+Group: ShowZip
+
+Command: $TOOL $ARG1
+Expect: testexpect/showzip-$ARG2.txt
+
+Test: Zip with NFS-naming
+Args: testdata/testdir-unix.zip unix
+
+Test: Zip with RISC OS fields
+Args: testdata/testdir-ro.zip ro

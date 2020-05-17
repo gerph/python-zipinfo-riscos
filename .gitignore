@@ -4,4 +4,7 @@
 nosetests.xml
 cover
 .coverage
+venv
 
+# Artifacts
+artifacts

@@ -1,0 +1,47 @@
+# Definition for CI within GitLab
+# Note:
+#    Prefix any job name with a '.' to disable.
+#
+
+
+test:
+  stage: unittest
+  script:
+    - make tests
+  dependencies: []
+  artifacts:
+    when: always
+    paths:
+      - artifacts
+    reports:
+      junit:
+        - artifacts/test-results.xml
+
+
+coverage:
+  stage: unittest
+  script:
+    - make coverage
+  dependencies: []
+  #coverage: '/^Overall Coverage: (\d+(?:\.\d+)?)%.*$/'
+  coverage: '/^rozip.* (\d+(?:\.\d+)?)%.*$/'
+
+
+inttest:
+  stage: inttest
+  script:
+    - make inttests
+  dependencies: []
+  artifacts:
+    when: always
+    paths:
+      - artifacts
+    reports:
+      junit:
+        - artifacts/inttest.xml
+
+
+#### Stages to execute ####
+stages:
+  - unittest
+  - inttest
