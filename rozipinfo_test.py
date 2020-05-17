@@ -33,6 +33,7 @@ EXECADDR_TESTDATE = 0x6be0ff60
 
 FILETYPE_TEXT = 0xFFF
 FILETYPE_DATA = 0xFFD
+FILETYPE_SPRITE = 0xFF9
 FILETYPE_ZIP = 0xA91
 
 OBJTYPE_FILE = 1
@@ -64,15 +65,15 @@ class BaseTestCase(unittest.TestCase):
         if filename is not None:
             self.assertEqual(zi.riscos_filename, filename)
 
+        if filetype is not None:
+            self.assertEqual(hex(zi.riscos_filetype), hex(filetype))
+
         if loadexec is not None:
             self.assertEqual((hex(zi.riscos_loadaddr), hex(zi.riscos_execaddr)), (hex(loadexec[0]), hex(loadexec[1])))
 
         if attr is not None:
             self.assertEqual(zi.riscos_attr, attr)
             self.assertEqual(zi.riscos_attr, attr)
-
-        if filetype is not None:
-            self.assertEqual(zi.riscos_filetype, filetype)
 
         if objtype is not None:
             self.assertEqual(zi.riscos_objtype, objtype)
@@ -203,24 +204,134 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         original = zipfile.ZipInfo(filename='directory/')
         zi = rozipinfo.ZipInfoRISCOS(filename='directory/')
         self.checkRISCOS(zi,
-                         filename=original.filename,
+                         filename='directory',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 
 
-class Test20FilenameFiletype(BaseTestCase):
+class Test20FilenamePathFiletype(BaseTestCase):
     """
     Effects of changing the filename.
     """
 
-    def test_001_extension_mapping(self):
+    def test_001_extension_mapping_zip(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='file.zip')
         self.checkRISCOS(zi,
-                         filename='file.zip',
+                         filename='file/zip',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_ZIP),
                          filetype=FILETYPE_ZIP,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_002_extension_mapping_txt(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file.txt')
+        self.checkRISCOS(zi,
+                         filename='file/txt',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_050_directory_mapping_c(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/source')
+        self.checkRISCOS(zi,
+                         filename='c.source',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_051_directory_mapping_c_subdir(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='myapp/c/source')
+        self.checkRISCOS(zi,
+                         filename='myapp.c.source',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_052_directory_mapping_s(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='s/assembly')
+        self.checkRISCOS(zi,
+                         filename='s.assembly',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_053_directory_mapping_s_deep(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='this/that/myapp/s/assembly')
+        self.checkRISCOS(zi,
+                         filename='this.that.myapp.s.assembly',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_060_directory_mapping_not_s(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='nots/assembly')
+        self.checkRISCOS(zi,
+                         filename='nots.assembly',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+
+class Test21FilenameNFSEncoding(BaseTestCase):
+    """
+    Using the NFS Encoding to set filetypes and load/exec
+    """
+
+    def test_001_filetype_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9')
+        self.assertEqual(zi.filename, 'file,ff9')
+        self.checkRISCOS(zi,
+                         filename='file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_002_filetype_suffix_invalid(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,fft')
+        self.assertEqual(zi.filename, 'file,fft')
+        self.checkRISCOS(zi,
+                         filename='file,fft',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_003_filetype_suffix_before_pathname(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9')
+        self.assertEqual(zi.filename, 'c/file,ff9')
+        self.checkRISCOS(zi,
+                         filename='c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_004_loadexec_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201') # Note intentional + 1 to check it's real
+        self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
+        self.checkRISCOS(zi,
+                         filename='c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE + 1, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_005_loadexec_suffix_untyped(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321')
+        self.assertEqual(zi.filename, 'c/file,12345678,87654321')
+        self.checkRISCOS(zi,
+                         filename='c.file',
+                         loadexec=build_loadexec(0x12345678, 0x87654321),
+                         filetype=-1,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 

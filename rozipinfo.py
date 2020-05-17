@@ -47,6 +47,16 @@ import sys
 import zipfile
 
 
+try:
+    # Python 3: maketrans is a member of str
+    maketrans = str.maketrans
+
+except AttributeError:
+    # Python 2: maketrans is a member of string
+    import string
+    maketrans = string.maketrans
+
+
 unix_epoch_to_riscos_epoch = int(int(70*365.25) * 24*60*60)
 datetime_epochtime = datetime.datetime(1970, 1, 1, tzinfo=None)
 
@@ -155,6 +165,16 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     # Filetype to use when none is known, and when the file is marked as text
     default_filetype = 0xFFD
     default_filetype_text = 0xFFF
+
+    # Encoding to use for filenames returned to RISC OS
+    # For use in a wider environment, consider using riscos-latin1 from the python-codecs-riscos module.
+    filename_encoding_name = 'latin-1'
+
+    # The characters acceptable to the NFS encoding
+    nfs_encoding_hexdigits = '0123456789abcdef'
+
+    # Translation for the string
+    exchange_dot_slash = maketrans('/.', './')
 
     # Mappings for filename extensions (if no MimeMap implementation is present), lower case.
     filetype_extension_mappings = {
@@ -385,14 +405,128 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 return filetype
 
         if '/' in self.filename:
-            dirname, _ = self.filename.rsplit('/')
+            dirname, _ = self.filename.rsplit('/', 1)
             if '/' in dirname:
-                dirname, _ = dirname.split('/', 1)
+                _, dirname = dirname.rsplit('/', 1)
             filetype = self.filetype_parentdir_mappings.get(dirname.lower())
             if filetype is not None:
                 return filetype
 
         return None
+
+    @classmethod
+    def extract_nfs_encoding(cls, name):
+        """
+        Extract the NFS encoding from the filename to give the bare filename and load/exec or filetype.
+
+        @param name:    Unix-like filename
+
+        @return: tuple of (unix-filename stripped of suffix, load, exec, filetype)
+        """
+        loadaddr = None
+        execaddr = None
+        filetype = None
+
+        try:
+            if len(name) > 4 and \
+               name[-4] == ',' and all(c in cls.nfs_encoding_hexdigits for c in name[-3:]):
+                # Filename,xxx format
+                filetype = int(name[-3:], 16)
+                name = name[:-4]
+
+            elif len(name) > 18 and \
+               name[-9] == ',' and name[-18] == ',' and \
+               all(c in cls.nfs_encoding_hexdigits for c in name[-8:]) and \
+               all(c in cls.nfs_encoding_hexdigits for c in name[-17:-9]):
+                # 1+8+1+8 for ,llllllll,eeeeeeee
+                loadaddr = int(name[-17:-9], 16)
+                execaddr = int(name[-8:], 16)
+                name = name[:-18]
+
+                if (loadaddr & 0xFFF00000) == 0xFFF00000:
+                    # This is typed, so return the type as well.
+                    filetype = (loadaddr >> 8) & 0xFFF
+
+        except (ValueError, IndexError) as exc:
+            # Any failures to convert numbers, or reference bad indexes, in here means it's not
+            # an NFS extension format.
+            return (name, None, None, None)
+
+        return (name, loadaddr, execaddr, filetype)
+
+    @classmethod
+    def encode_to_riscos(cls, name):
+        """
+        Convert the unicode string supplied to a RISC OS locale encoded string.
+
+        Together with unix_to_riscos(), this provides the filename conversion.
+
+        This is only for the literal encoding of characters, so that the locale is respected.
+        See unix_to_riscos to path encoding considerations.
+
+        For example, the implementation may use the standard encode() functions to encoding to
+        the RISC OS locale. This may be a poor substitution for some characters which cannot be
+        replaced. The LanMan98 encoding of characters could alternatively be used here.
+
+        This implementation uses the filename_encoding_name class property to determine the
+        target encoding.
+        """
+
+        # Spaces aren't allowed in the filename, and converting them to hard-spaces here
+        # meeans they will be correct in whatever locale has been selected.
+        name = name.replace(' ', u'\xa0')
+
+        name = name.encode(cls.filename_encoding_name, 'replace')
+        return name
+
+    @classmethod
+    def unix_to_riscos(cls, name):
+        """
+        Convert the unix layout string to a RISC OS layout string.
+
+        Together with encode_to_riscos(), this provides the filename conversion.
+
+        This deals with the formatting of the file components to make it safe. This implementation
+        is specific to the filenames in the Zip file and will attempt to remove any sequences which
+        would be unsafe in a RISC OS filename.
+        """
+
+        # Exchange the path/extension separators to be RISC OS format
+        name = name.translate(cls.exchange_dot_slash)
+
+        # Make any attempt to inject system variables safe
+        name = name.replace('<', '(').replace('>', ')')
+
+        # Remove any initial anchors
+        while name.startswith(('$.', '@.', '%.', '\\.', '&.', '^.')):
+            name = name[2:]
+
+        # Strip wildcards
+        name = name.replace('*', '(star)').replace('?', '(q)')
+
+        # Strip relative naming
+        name = name.replace('.^', '')
+
+        # Other anchors anywhere else in the name will be invalid, so no need to make them safe
+
+        # Prevent disc naming
+        name = name.replace(':', '--')
+
+        # Quotes aren't allowed in filenames either
+        name = name.replace('"', "'")
+
+        # Prevent special field naming (may be overzealous here?)
+        name = name.replace('#', '(h)')
+
+        # RISC OS names cannot start or end in a path separator
+        if name.startswith('.'):
+            name = name[1:]
+        if name.endswith('.'):
+            name = name[:-1]
+
+        # At this point the filename will either be invalid, or safe for use without it going outside
+        # the target directory.
+        return name
 
     ################ NFS encoding setting
     @property
@@ -409,8 +543,22 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     ################ Filename
     @property
     def riscos_filename(self):
-        # FIXME: Convert filename to RISC OS format
-        return self.filename
+        if self._riscos_filename is not None:
+            return self._riscos_filename
+
+        if self.nfs_encoding:
+            # Convert filename to RISC OS format
+            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+            # We don't care about those types here; just that the name has been extracted.
+
+        # The filename is in unicode format for self.filename.
+        # RISC OS filename should be in the RISC OS locale, so first we need to encode the
+        # filename properly.
+        name = self.encode_to_riscos(name)
+
+        # The '.' and '/' characters need to be exchanged, and any other characters made safe.
+        name = self.unix_to_riscos(name)
+        return name
 
     @riscos_filename.setter
     def riscos_filename(self, value):
@@ -456,6 +604,13 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
                 return loadaddr
 
+        # No load address given explicitly, so try to extract from NFS naming
+        if self.nfs_encoding:
+            # Convert filename to RISC OS format
+            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+            if loadaddr is not None:
+                return loadaddr
+
         # No load address given; so we have to generate one from the date_time
         dt = tuple_to_datetime(self.riscos_date_time)
         quin = datetime_to_quin(dt)
@@ -482,6 +637,13 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if self._riscos_execaddr is not None:
             # Exec address exists.
             return self._riscos_execaddr
+
+        # No exec address given explicitly, so try to extract from NFS naming
+        if self.nfs_encoding:
+            # Convert filename to RISC OS format
+            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+            if execaddr is not None:
+                return execaddr
 
         # No exec address given; so we have to generate one from the date_time
         dt = tuple_to_datetime(self.riscos_date_time)
@@ -548,26 +710,41 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     @property
     def riscos_filetype(self):
         # Convert information to RISC OS file type
-        if self._riscos_filetype is None:
-            # No filetype currently set, so we'll infer one.
+        if self._riscos_filetype is not None:
+            return self._riscos_filetype
 
-            # Call out to MimeMap to get the correct filetype for the name.
-            if '.' in self.filename:
-                _, ext = self.filename.rsplit('.', 1)
-                filetype = self.filetype_from_extension(ext)
-                if filetype:
-                    return filetype
+        # No filetype currently set, so we'll infer one.
+        if self.nfs_encoding:
+            # Convert filename to RISC OS format
+            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+            if filetype is not None:
+                return filetype
+            if loadaddr is not None:
+                # A load address was given, which isn't a filetype, so report as no type
+                # present.
+                return -1
 
-            # Now try our internal mappings
-            filetype = self.filetype_based_on_filename()
+        if self._riscos_loadaddr is not None and \
+           (self._riscos_loadaddr & 0xFFF00000) != 0xFFF00000:
+            # A load address has been supplied, and it's not a filetype.
+            return -1
+
+        # Call out to MimeMap to get the correct filetype for the name.
+        if '.' in self.filename:
+            _, ext = self.filename.rsplit('.', 1)
+            filetype = self.filetype_from_extension(ext)
             if filetype:
                 return filetype
 
-            if self.internal_attr & self.internal_attr_text:
-                return self.default_filetype_text
+        # Now try our internal mappings
+        filetype = self.filetype_based_on_filename()
+        if filetype:
+            return filetype
 
-            return self.default_filetype
-        return self._riscos_filetype
+        if self.internal_attr & self.internal_attr_text:
+            return self.default_filetype_text
+
+        return self.default_filetype
 
     @riscos_filetype.setter
     def riscos_filetype(self, value):
