@@ -33,9 +33,12 @@ EXECADDR_TESTDATE = 0x6be0ff60
 
 FILETYPE_TEXT = 0xFFF
 FILETYPE_DATA = 0xFFD
+FILETYPE_ZIP = 0xA91
 
 OBJTYPE_FILE = 1
 OBJTYPE_DIRECTORY = 2
+
+ATTR_RW = 0x33
 
 
 # Ensure that the Coverage module is configured to instrument the package we
@@ -62,8 +65,7 @@ class BaseTestCase(unittest.TestCase):
             self.assertEqual(zi.riscos_filename, filename)
 
         if loadexec is not None:
-            self.assertEqual(zi.riscos_loadaddr, loadexec[0])
-            self.assertEqual(zi.riscos_execaddr, loadexec[1])
+            self.assertEqual((hex(zi.riscos_loadaddr), hex(zi.riscos_execaddr)), (hex(loadexec[0]), hex(loadexec[1])))
 
         if attr is not None:
             self.assertEqual(zi.riscos_attr, attr)
@@ -149,7 +151,7 @@ class Test10ConstructOriginalFeatures(BaseTestCase):
         self.assertEqual(zi.external_attr, original.external_attr)
 
 
-class Test10ConstructRISCOSFeatures(BaseTestCase):
+class Test11ConstructRISCOSFeatures(BaseTestCase):
 
     def test_001_empty(self):
         # Check that it works as when given nothing
@@ -160,7 +162,8 @@ class Test10ConstructRISCOSFeatures(BaseTestCase):
                          filename=original.filename,
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
-                         objtype=OBJTYPE_FILE)
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
     def test_002_filename(self):
         # Check that it works when given a filename
@@ -170,7 +173,8 @@ class Test10ConstructRISCOSFeatures(BaseTestCase):
                          filename=original.filename,
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
-                         objtype=OBJTYPE_FILE)
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
     def test_003_datetime(self):
         # Check that it works when given a datetime
@@ -180,7 +184,8 @@ class Test10ConstructRISCOSFeatures(BaseTestCase):
                          filename=original.filename,
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
-                         objtype=OBJTYPE_FILE)
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
     def test_004_zipinfo(self):
         # Check that it works when given a zipinfo
@@ -190,7 +195,8 @@ class Test10ConstructRISCOSFeatures(BaseTestCase):
                          filename=original.filename,
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
-                         objtype=OBJTYPE_FILE)
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
     def test_010_directory(self):
         # Check that it works when given a filename
@@ -200,7 +206,23 @@ class Test10ConstructRISCOSFeatures(BaseTestCase):
                          filename=original.filename,
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
-                         objtype=OBJTYPE_FILE)
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+
+class Test20FilenameFiletype(BaseTestCase):
+    """
+    Effects of changing the filename.
+    """
+
+    def test_001_extension_mapping(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file.zip')
+        self.checkRISCOS(zi,
+                         filename='file.zip',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_ZIP),
+                         filetype=FILETYPE_ZIP,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
 
 if __name__ == '__main__':

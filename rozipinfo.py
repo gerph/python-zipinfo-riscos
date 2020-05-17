@@ -3,7 +3,42 @@ Management of the extension fields for RISC OS in ZipInfo objects.
 
 ZipInfo objects hold the information extracted from the Zip archives for a file.
 RISC OS extra fields in this ZipInfo are extractable using the ZipInfoRISCOS object.
-This object provides 
+This object provides a way of extracting or storing the RISC OS extension data so
+that it can be used with Zip files.
+
+The ZipInfoRISCOS object is expected to be used just like the zipfile.ZipInfo
+object, with the following extensions:
+
+    * If read from a zip file, the extra field will automatically populate the
+      riscos_* properties.
+    * Any riscos_* properties which is updated will cause the base properties
+      to be updated. For example, updating the riscos_loadaddr will cause the
+      date_time property to be updated to hold the new timestamp.
+    * If riscos_* properties are explicitly set, they will be inferred from
+      the base properties.
+      * Load and Exec timestamps will be taken from the riscos_date_time
+        property.
+      * Load and Exec filetype will be taken from the riscos_filetype.
+      * The riscos_date_time property will be taken from the base date_time
+        property, or from the Load and Exec timestamps if they were set.
+      * Filetypes will be taken from the text flag, or may be inferred from
+        the filename (see the filetype_parentdir_mappings and
+        filetype_extension_mappings dictionaries for direct ways to extend
+        this).
+      * MimeMap may be queried before the internal extensions if this
+        is implemented (see filetype_from_extension method).
+      * Object types will be taken from the MS-DOS directory attribute, or
+        the existance of a trailing '/' on the filename.
+      * File attributes will be taken from the MS-DOS read-only attribute,
+        and any unix attributes present in the upper 16bits of the external
+        attributes.
+    * Once the individual RISC OS properties have been set, changing the
+      base properties has no effect. This is largely to keep the amount of
+      combinations down, and reduce complexity.
+    * If nfs_encoding is set, the RISC OS extra field will not be written,
+      but the filename will be updated to reflect the filetype and load/exec
+      addresses, in line with the NFS extension usage. This is supported by
+      the MiniZip/MiniUnzip tools, and by the InfoZip tools.
 """
 
 import datetime
@@ -308,7 +343,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
     def _update_date_time(self):
         """
-        Update the date/time fields 
+        Update the date/time fields
         """
         # This is a RISC OS timestamped object, so we can update the date time
         quin = loadexec_to_quin(loadaddr=self.riscos_loadaddr,
@@ -444,7 +479,6 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     ################ Exec address
     @property
     def riscos_execaddr(self):
-        # Convert time/filetype to RISC OS format
         if self._riscos_execaddr is not None:
             # Exec address exists.
             return self._riscos_execaddr
@@ -458,24 +492,62 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     @riscos_execaddr.setter
     def riscos_execaddr(self, value):
         self._riscos_execaddr = value
-        # FIXME: Update the date_time and filetype
+        self._update_date_time()
         self._riscos_present = True
 
     ################ File attributes
     @property
     def riscos_attr(self):
-        # FIXME: Convert attributes to RISC OS file attributes
-        return self._riscos_attr
+        if self._riscos_attr is not None:
+            return self._riscos_attr
+
+        # Convert attributes to RISC OS file attributes
+        if self.external_attr & 0xFFFF0000:
+            # The unix attributes look valid, so we'll use them
+            attr = 0x00
+            # FIXME: Decide whether we should separate the 'you'/'others' into the
+            #        'owner'/'others' permissions.
+            if self.external_attr & 0o222:
+                # One of the write permissions was set
+                attr |= 0x22
+            if self.external_attr & 0o444:
+                # One of the Read permissions was set
+                attr |= 0x11
+            return attr
+
+        if self.external_attr & self.external_attr_msdos_readonly:
+            # Read only => no write access
+            # We /could/ report object locked against deletion, but that's not the same meaning
+            return 0x11
+
+        return 0x33
 
     @riscos_attr.setter
     def riscos_attr(self, value):
-        # FIXME: Convert file attributes from RISC OS format to format for zipfile
-        pass
+        # Convert file attributes from RISC OS format to format for zipfile
+        if value & 0x22:
+            # Write is enabled, so mark in the MSDOS attributes
+            self.external_attr = self.external_attr & ~self.external_attr_msdos_readonly
+
+            if (self.external_attr & 0xFFFF0000):
+                # There are unix attributes set in the external_attr flags, so we should update
+                # them with the new value - remove the write bit.
+                self.external_attr = self.external_attr & ~0o222
+        else:
+            # Set readonly if no write permission
+            self.external_attr = self.external_attr | self.external_attr_msdos_readonly
+
+            if (self.external_attr & 0xFFFF0000):
+                # There are unix attributes set in the external_attr flags, so we should update
+                # them with the new value - add the write bit.
+                self.external_attr = self.external_attr | 0o222
+        self._riscos_attr = value
+        self._riscos_present = True
 
     ################ File type
     @property
     def riscos_filetype(self):
-        # FIXME: Convert information to RISC OS file type
+        # Convert information to RISC OS file type
         if self._riscos_filetype is None:
             # No filetype currently set, so we'll infer one.
 
