@@ -39,6 +39,25 @@ object, with the following extensions:
       but the filename will be updated to reflect the filetype and load/exec
       addresses, in line with the NFS extension usage. This is supported by
       the MiniZip/MiniUnzip tools, and by the InfoZip tools.
+
+How to use the nfs_encoding switch:
+
+    * When reading an archive, commonly this should be enabled (the default),
+      as this will use RISC OS extra field if present, and then fall back to
+      using the the NFS encoding information if present, before finally using
+      the inferrence from the filename and attributes.
+
+    * When writing an archive, if the archive is intended for use on RISC OS,
+      the nfs_encoding should be disabled. This will allow the RISC OS extra
+      field to be written, as this preserves as much information as possible
+      and doesn't require NFS extension translation on RISC OS systems.
+
+    * If the archive is intended for use on non-RISC OS systems, or for safe
+      transfer between systems, the nfs_encoding should be enabled. This will
+      prevent the use of the RISC OS extra field, and instead encode the
+      RISC OS type and date information into the filename and date field.
+      When extracted on RISC OS systems, the files will need to be manually
+      translated, or use the MiniUnzip tool to extract the file information.
 """
 
 import datetime
@@ -134,6 +153,8 @@ def quin_to_loadexec(quin, filetype=0xFFF):
     """
     Return the load/exec for a given quin and filetype
     """
+    if filetype == ZipInfoRISCOS.directory_filetype:
+        filetype = ZipInfoRISCOS.directory_filetype_internal
     loadaddr = ((quin >> 32) & 255) | 0xFFF00000 | (filetype << 8)
     execaddr = (quin & 0xFFFFFFFF)
     return (loadaddr, execaddr)
@@ -165,6 +186,10 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     # Filetype to use when none is known, and when the file is marked as text
     default_filetype = 0xFFD
     default_filetype_text = 0xFFF
+
+    # Filetype to use for the directory in the API, and in the loadaddr
+    directory_filetype = 0x1000
+    directory_filetype_internal = 0xFFD
 
     # Encoding to use for filenames returned to RISC OS
     # For use in a wider environment, consider using riscos-latin1 from the python-codecs-riscos module.
@@ -375,6 +400,34 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             self.riscos_date_time = (dt.year, dt.month, dt.day,
                                      dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
 
+    def _update_nfs_encoding(self):
+        """
+        Update the filename for the NFS encoded form of the name.
+        """
+        # Translate the RISC OS layout to unix layout
+        name = self.riscos_to_unix(self.riscos_filename)
+
+        # Decode the RISC OS filename into unicode for the Zip
+        name = self.decode_from_riscos(name)
+
+        # Only files get the NFS encoding
+        if self.riscos_objtype == 1:
+            # Now append any NFS extensions as necessary
+            name = self.build_nfs_encoding(name, self.riscos_loadaddr, self.riscos_execaddr)
+
+            # Tweak the returned names so that we don't append filetypes unnecessarily
+            if self.internal_attr & self.internal_attr_text:
+                expected_type = self.default_filetype_text
+            else:
+                expected_type = self.default_filetype
+            if name.endswith(',{:3x}'.format(expected_type)):
+                name = name[:-4]
+        else:
+            # Directories must always end in a '/'
+            name += '/'
+
+        self.filename = name
+
     def filetype_from_extension(self, ext):
         """
         Use MimeMap to lookup the filetype for this file.
@@ -455,6 +508,35 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         return (name, loadaddr, execaddr, filetype)
 
     @classmethod
+    def build_nfs_encoding(cls, name, loadaddr=None, execaddr=None, filetype=None):
+        """
+        Build the NFS encoded name, using the base unix name and parameters.
+
+        @param name:        Unix-like filename (which may already contain NFS encoded names)
+        @param loadaddr:    Load address to use
+        @param execaddr:    Exec address to use
+        @param filetype:    Filetype
+
+        @return: unix filename
+        """
+        # Remove any existing NFS encoding information
+        (name, _, _, _) = cls.extract_nfs_encoding(name)
+
+        if loadaddr is not None and execaddr is not None:
+            # They supplied explicit load and exec addresses.
+            # These might be a filetype, which means we can probably just use the filetype
+            if (loadaddr & 0xFFF00000) == 0xFFF00000:
+                # Filetyped, so actually we just use this filetype
+                filetype = (loadaddr >> 8) & 0xFFF
+            else:
+                return '{},{:08x},{:08x}'.format(name, loadaddr, execaddr)
+
+        if filetype is not None:
+            return '{},{:03x}'.format(name, filetype)
+
+        return name
+
+    @classmethod
     def encode_to_riscos(cls, name):
         """
         Convert the unicode string supplied to a RISC OS locale encoded string.
@@ -464,7 +546,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         This is only for the literal encoding of characters, so that the locale is respected.
         See unix_to_riscos to path encoding considerations.
 
-        For example, the implementation may use the standard encode() functions to encoding to
+        For example, the implementation may use the standard encode() functions for encoding to
         the RISC OS locale. This may be a poor substitution for some characters which cannot be
         replaced. The LanMan98 encoding of characters could alternatively be used here.
 
@@ -474,9 +556,34 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         # Spaces aren't allowed in the filename, and converting them to hard-spaces here
         # meeans they will be correct in whatever locale has been selected.
-        name = name.replace(' ', u'\xa0')
+        name = name.replace(u' ', u'\xa0')
 
         name = name.encode(cls.filename_encoding_name, 'replace')
+        return name
+
+    @classmethod
+    def decode_from_riscos(cls, name):
+        """
+        Convert the RISC OS local encoded string into a unicode string.
+
+        Together with riscos_to_unix(), this provides the filename conversion.
+
+        This is only for the literal encoding of characters, so that the locale is respected.
+        See riscos_to_unix to path encoding considerations.
+
+        For example, the implementation may use the standard decode() functions for decoding
+        from the RISC OS locale.
+        The LanMan98 encoding of characters could also be used here.
+
+        This implementation uses the filename_encoding_name class property to determine the
+        target encoding.
+        """
+
+        name = name.decode(cls.filename_encoding_name, 'replace')
+
+        # Spaces aren't allowed in the filename, and we've encoded them as hard spaces in
+        # RISC OS, so we need to translate them back to regular spaces for unix use.
+        name = name.replace(u'\xa0', u' ')
         return name
 
     @classmethod
@@ -493,6 +600,42 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         # Exchange the path/extension separators to be RISC OS format
         name = name.translate(cls.exchange_dot_slash)
+
+        # Make the path name safe for RISC OS
+        name = cls.sanitise_riscos(name)
+        return name
+
+    @classmethod
+    def riscos_to_unix(cls, name):
+        """
+        Convert the unix layout string to a RISC OS layout string.
+
+        Together with decode_from_riscos(), this provides the filename conversion.
+
+        This deals with the formatting of the file components to make it safe. This implementation
+        is specific to the filenames in the Zip file and will attempt to remove any sequences which
+        would be unsafe in a RISC OS filename.
+        """
+
+        # Make the path name safe for RISC OS
+        name = cls.sanitise_riscos(name)
+
+        # Exchange the path/extension separators to be RISC OS format
+        name = name.translate(cls.exchange_dot_slash)
+        return name
+
+    @classmethod
+    def sanitise_riscos(cls, name):
+        """
+        Ensure that the name we use on the RISC OS side is safe.
+
+        We remove or replace any unsafe characters to build a RISC OS name which is either completely
+        valid, or invalid, but never strays outside the target directory.
+
+        @param name:    RISC OS name to translate
+
+        @return: Safe name to use for RISC OS
+        """
 
         # Make any attempt to inject system variables safe
         name = name.replace('<', '(').replace('>', ')')
@@ -550,6 +693,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             # Convert filename to RISC OS format
             (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
             # We don't care about those types here; just that the name has been extracted.
+        else:
+            name = self.filename
 
         # The filename is in unicode format for self.filename.
         # RISC OS filename should be in the RISC OS locale, so first we need to encode the
@@ -562,8 +707,20 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
     @riscos_filename.setter
     def riscos_filename(self, value):
-        # FIXME: Convert filename from RISC OS format to format for zipfile
-        pass
+        # Convert filename from RISC OS format to format for zipfile
+
+        # Make it safe for use in the archive.
+        riscos_filename = self.sanitise_riscos(value)
+
+        # Translate the RISC OS layout to unix layout
+        name = self.riscos_to_unix(riscos_filename)
+
+        # Decode the RISC OS filename into unicode for the Zip
+        name = self.decode_from_riscos(name)
+        # FIXME: Apply the NFS encoding.
+        self.filename = name
+        self._riscos_filename = riscos_filename
+        self._riscos_present = True
 
     ################ Date/time
     @property
@@ -604,12 +761,13 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
                 return loadaddr
 
-        # No load address given explicitly, so try to extract from NFS naming
-        if self.nfs_encoding:
-            # Convert filename to RISC OS format
-            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
-            if loadaddr is not None:
-                return loadaddr
+        if self.riscos_objtype == 1:
+            # No load address given explicitly, so try to extract from NFS naming
+            if self.nfs_encoding:
+                # Convert filename to RISC OS format
+                (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+                if loadaddr is not None:
+                    return loadaddr
 
         # No load address given; so we have to generate one from the date_time
         dt = tuple_to_datetime(self.riscos_date_time)
@@ -627,6 +785,11 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000:
                 # This object has a filetype
                 self._riscos_filetype = (value >> 8) & 0xFFF
+            else:
+                # No filetype set.
+                self._riscos_filetype = None
+        else:
+            self._riscos_filetype = self.directory_filetype
         self._update_date_time()
 
         self._riscos_present = True
@@ -713,6 +876,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if self._riscos_filetype is not None:
             return self._riscos_filetype
 
+        if self.external_attr & self.external_attr_msdos_directory:
+            return self.directory_filetype
+
         # No filetype currently set, so we'll infer one.
         if self.nfs_encoding:
             # Convert filename to RISC OS format
@@ -747,10 +913,49 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         return self.default_filetype
 
     @riscos_filetype.setter
-    def riscos_filetype(self, value):
-        # FIXME: Convert filetype from RISC OS format to format for zipfile
-        # FIXME: Update the load/exec
-        pass
+    def riscos_filetype(self, filetype):
+        if filetype == self.directory_filetype:
+            # They want this to be a directory.
+            self._riscos_filetype = None  # Temporary disable to avoid recursion
+            self.riscos_objtype = 2
+        else:
+            # Force this to be a file, if it was a directory
+            if self.riscos_objtype != 1:
+                self.riscos_objtype = 1
+
+        # Convert filetype from RISC OS format to format for zipfile
+        if self._riscos_loadaddr is not None:
+            # The load address is set, so we need to override it.
+            if (self._riscos_loadaddr & 0xFFF00000) != 0xFFF00000:
+                # It contains a type, so we need to replace it.
+                if filetype == self.directory_filetype:
+                    self._riscos_loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.directory_filetype_internal << 8)
+                else:
+                    self._riscos_loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (filetype << 8)
+            else:
+                # The load address is untyped, so we need to build a new one from the datetime
+                dt = tuple_to_datetime(self.riscos_date_time)
+                quin = datetime_to_quin(dt)
+                (self._riscos_loadaddr, self._riscos_execaddr) = quin_to_loadexec(quin, filetype=filetype)
+        else:
+            # There was no load/exec specified, so we will let the properties handle that.
+            pass
+
+        if filetype == self.default_filetype_text and \
+           self.default_filetype_text != self.default_filetype:
+            # It's a text filetype (and we're differentiating text and non-text files), so set the correct
+            # bit in the internal attributes
+            self.internal_attr |= self.internal_attr_text
+        else:
+            # Not text (or we're not differentiating, so clear the text flag)
+            self.internal_attr &= ~self.internal_attr_text
+
+        self._riscos_filetype = filetype
+        self._riscos_present = True
+
+        if self.nfs_encoding:
+            # We need to update the filename to reflect new parameters
+            self._update_nfs_encoding()
 
     @property
     def riscos_objtype(self):
@@ -759,15 +964,25 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             return self._riscos_objtype
 
         if self.external_attr & self.external_attr_msdos_directory:
-            return 2;
+            return 2
         return 1
 
     @riscos_objtype.setter
     def riscos_objtype(self, value):
         # Convert object type from RISC OS format to format for zipfile
-        if self._riscos_objtype == 2:
+        if value == 2:
             if self._riscos_filetype is not None:
-                self._riscos_filetype = 0x1000
+                self._riscos_filetype = None
+            if self._riscos_loadaddr is not None:
+                # If a load address was set, we need to reset it to the directory type
+                self._riscos_loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.directory_filetype_internal << 8)
+
+        self._riscos_objtype = value
+        self._riscos_present = True
+
+        if self.nfs_encoding:
+            # We need to update the filename to reflect new parameters
+            self._update_nfs_encoding()
 
         if self._riscos_objtype == 2:
             # The external attributes are defined to contain attributes based on the creator type.

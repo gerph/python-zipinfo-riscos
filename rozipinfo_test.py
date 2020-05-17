@@ -35,6 +35,7 @@ FILETYPE_TEXT = 0xFFF
 FILETYPE_DATA = 0xFFD
 FILETYPE_SPRITE = 0xFF9
 FILETYPE_ZIP = 0xA91
+FILETYPE_DIRECTORY = 0x1000
 
 OBJTYPE_FILE = 1
 OBJTYPE_DIRECTORY = 2
@@ -52,6 +53,8 @@ if os.environ.get('NOSE_WITH_COVERAGE') or '--with-coverage' in sys.argv:
 
 
 def build_loadexec(loadaddr, execaddr, filetype=None):
+    if filetype == FILETYPE_DIRECTORY:
+        filetype = FILETYPE_DATA  # That's how it's represented in load/exec
     if filetype is not None:
         loadaddr = (loadaddr & 0xFFF000FF) | filetype << 8
     return (loadaddr, execaddr)
@@ -332,6 +335,158 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filename='c.file',
                          loadexec=build_loadexec(0x12345678, 0x87654321),
                          filetype=-1,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+
+class Test22FilenameNFSEncodingDisabled(BaseTestCase):
+    """
+    WITHOUT the NFS Encoding to set filetypes and load/exec
+    """
+
+    def test_001_filetype_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9', nfs_encoding=False)
+        self.assertEqual(zi.filename, 'file,ff9')
+        self.checkRISCOS(zi,
+                         filename='file,ff9',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_002_filetype_suffix_invalid(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,fft', nfs_encoding=False)
+        self.assertEqual(zi.filename, 'file,fft')
+        self.checkRISCOS(zi,
+                         filename='file,fft',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_003_filetype_suffix_before_pathname(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9', nfs_encoding=False)
+        self.assertEqual(zi.filename, 'c/file,ff9')
+        self.checkRISCOS(zi,
+                         filename='c.file,ff9',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_004_loadexec_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201', nfs_encoding=False) # Note intentional + 1 (to match enabled case)
+        self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
+        self.checkRISCOS(zi,
+                         filename='c.file,fffff93a,c7524201',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_005_loadexec_suffix_untyped(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321', nfs_encoding=False)
+        self.assertEqual(zi.filename, 'c/file,12345678,87654321')
+        self.checkRISCOS(zi,
+                         filename='c.file,12345678,87654321',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+
+class Test40BaseProperties(BaseTestCase):
+    """
+    Setting base properties
+    """
+    # FIXME: Not yet implemted as tests
+    pass
+
+
+class Test60RISCOSProperties(BaseTestCase):
+    """
+    Set RISC OS properties
+    """
+
+    def test_001_filename(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_filename = "myfile"
+        self.assertEqual(zi.filename, 'myfile')
+        self.checkRISCOS(zi,
+                         filename='myfile',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_020_filetype(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_filetype = FILETYPE_SPRITE
+        self.assertEqual(zi.filename, 'NoName,ff9')
+        self.assertFalse(bool(zi.internal_attr & 1), "Check for internal text flag")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_021_filetype_text(self):
+        """
+        Text filetype should set the text bit, so not need to have the explicit NFS extension.
+        """
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_filetype = FILETYPE_TEXT
+        self.assertEqual(zi.filename, 'NoName')
+        self.assertTrue(bool(zi.internal_attr & 1), "Check for internal text flag")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_022_filetype_default(self):
+        """
+        Data filetype should clear the text bit, so not need to have the explicit NFS extension.
+        """
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_filetype = FILETYPE_DATA
+        self.assertEqual(zi.filename, 'NoName')
+        self.assertFalse(bool(zi.internal_attr & 1), "Check for internal text flag")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_040_directory(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_objtype = OBJTYPE_DIRECTORY
+        self.assertEqual(zi.filename, 'NoName/')
+        self.assertTrue(bool(zi.external_attr & 16), "Check for msdos directory bit")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DIRECTORY),
+                         filetype=FILETYPE_DIRECTORY,
+                         objtype=OBJTYPE_DIRECTORY,
+                         attr=ATTR_RW)
+
+    def test_041_directory_to_file(self):
+        # Was a directory, became a file
+        zi = rozipinfo.ZipInfoRISCOS(filename='mydir/')
+        # Interestingly, if you create a file with the suffix '/', ZipInfo won't imply that the object is a
+        # directory, even though it explicitly checks for the '/' and during from_file assigns the bit.
+        # So we will force the attribute bit to be set.
+        zi.external_attr |= 16
+        zi.riscos_objtype = OBJTYPE_FILE
+        self.assertEqual(zi.filename, 'mydir')
+        self.assertFalse(bool(zi.external_attr & 16), "Check for msdos directory bit")
+        self.checkRISCOS(zi,
+                         filename='mydir',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 
