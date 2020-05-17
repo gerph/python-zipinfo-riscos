@@ -171,7 +171,7 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         self.assertIsNotNone(zi)
         self.checkRISCOS(zi,
-                         filename=original.filename,
+                         filename=original.filename.encode(zi.filename_encoding_name),
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -182,7 +182,7 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         original = zipfile.ZipInfo(filename='myfile')
         zi = rozipinfo.ZipInfoRISCOS(filename='myfile')
         self.checkRISCOS(zi,
-                         filename=original.filename,
+                         filename=original.filename.encode(zi.filename_encoding_name),
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -193,7 +193,7 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         original = zipfile.ZipInfo(date_time=TESTDATE)
         zi = rozipinfo.ZipInfoRISCOS(date_time=TESTDATE)
         self.checkRISCOS(zi,
-                         filename=original.filename,
+                         filename=original.filename.encode(zi.filename_encoding_name),
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -204,7 +204,7 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         original = zipfile.ZipInfo(filename='myfile', date_time=TESTDATE)
         zi = rozipinfo.ZipInfoRISCOS(zipinfo=original)
         self.checkRISCOS(zi,
-                         filename=original.filename,
+                         filename=original.filename.encode(zi.filename_encoding_name),
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -215,7 +215,7 @@ class Test11ConstructRISCOSFeatures(BaseTestCase):
         original = zipfile.ZipInfo(filename='directory/')
         zi = rozipinfo.ZipInfoRISCOS(filename='directory/')
         self.checkRISCOS(zi,
-                         filename='directory',
+                         filename=b'directory',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -230,7 +230,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_001_extension_mapping_zip(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='file.zip')
         self.checkRISCOS(zi,
-                         filename='file/zip',
+                         filename=b'file/zip',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_ZIP),
                          filetype=FILETYPE_ZIP,
                          objtype=OBJTYPE_FILE,
@@ -239,7 +239,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_002_extension_mapping_txt(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='file.txt')
         self.checkRISCOS(zi,
-                         filename='file/txt',
+                         filename=b'file/txt',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -248,7 +248,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_050_directory_mapping_c(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/source')
         self.checkRISCOS(zi,
-                         filename='c.source',
+                         filename=b'c.source',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -257,7 +257,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_051_directory_mapping_c_subdir(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='myapp/c/source')
         self.checkRISCOS(zi,
-                         filename='myapp.c.source',
+                         filename=b'myapp.c.source',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -266,7 +266,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_052_directory_mapping_s(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='s/assembly')
         self.checkRISCOS(zi,
-                         filename='s.assembly',
+                         filename=b's.assembly',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -275,7 +275,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_053_directory_mapping_s_deep(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='this/that/myapp/s/assembly')
         self.checkRISCOS(zi,
-                         filename='this.that.myapp.s.assembly',
+                         filename=b'this.that.myapp.s.assembly',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -284,7 +284,7 @@ class Test20FilenamePathFiletype(BaseTestCase):
     def test_060_directory_mapping_not_s(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='nots/assembly')
         self.checkRISCOS(zi,
-                         filename='nots.assembly',
+                         filename=b'nots.assembly',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -300,7 +300,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9')
         self.assertEqual(zi.filename, 'file,ff9')
         self.checkRISCOS(zi,
-                         filename='file',
+                         filename=b'file',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
@@ -310,7 +310,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,fft')
         self.assertEqual(zi.filename, 'file,fft')
         self.checkRISCOS(zi,
-                         filename='file,fft',
+                         filename=b'file,fft',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -320,7 +320,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9')
         self.assertEqual(zi.filename, 'c/file,ff9')
         self.checkRISCOS(zi,
-                         filename='c.file',
+                         filename=b'c.file',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
@@ -330,7 +330,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201') # Note intentional + 1 to check it's real
         self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
         self.checkRISCOS(zi,
-                         filename='c.file',
+                         filename=b'c.file',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE + 1, filetype=FILETYPE_SPRITE),
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
@@ -340,7 +340,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321')
         self.assertEqual(zi.filename, 'c/file,12345678,87654321')
         self.checkRISCOS(zi,
-                         filename='c.file',
+                         filename=b'c.file',
                          loadexec=build_loadexec(0x12345678, 0x87654321),
                          filetype=-1,
                          objtype=OBJTYPE_FILE,
@@ -356,7 +356,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9', nfs_encoding=False)
         self.assertEqual(zi.filename, 'file,ff9')
         self.checkRISCOS(zi,
-                         filename='file,ff9',
+                         filename=b'file,ff9',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -366,7 +366,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,fft', nfs_encoding=False)
         self.assertEqual(zi.filename, 'file,fft')
         self.checkRISCOS(zi,
-                         filename='file,fft',
+                         filename=b'file,fft',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -376,7 +376,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9', nfs_encoding=False)
         self.assertEqual(zi.filename, 'c/file,ff9')
         self.checkRISCOS(zi,
-                         filename='c.file,ff9',
+                         filename=b'c.file,ff9',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -386,7 +386,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201', nfs_encoding=False) # Note intentional + 1 (to match enabled case)
         self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
         self.checkRISCOS(zi,
-                         filename='c.file,fffff93a,c7524201',
+                         filename=b'c.file,fffff93a,c7524201',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -396,7 +396,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321', nfs_encoding=False)
         self.assertEqual(zi.filename, 'c/file,12345678,87654321')
         self.checkRISCOS(zi,
-                         filename='c.file,12345678,87654321',
+                         filename=b'c.file,12345678,87654321',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -413,7 +413,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.filename = "another-name"
         self.checkRISCOS(zi,
-                         filename='another-name',
+                         filename=b'another-name',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -423,7 +423,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.date_time = TESTDATE
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -433,7 +433,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.internal_attr |= 1
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -443,7 +443,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr |= 16
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DIRECTORY,
                          objtype=OBJTYPE_DIRECTORY,
@@ -453,7 +453,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr |= 1
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -463,7 +463,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr = 0o444 << 16  # r--r--r--
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -473,7 +473,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr = 0o222 << 16  # -w--w--w-
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -483,7 +483,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr = 0o666 << 16  # rw-rw-rw-
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -493,7 +493,7 @@ class Test40BaseProperties(BaseTestCase):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.external_attr = 0o400 << 16  # r--------
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -507,10 +507,10 @@ class Test60RISCOSProperties(BaseTestCase):
 
     def test_001_filename(self):
         zi = rozipinfo.ZipInfoRISCOS()
-        zi.riscos_filename = "myfile"
+        zi.riscos_filename = b"myfile"
         self.assertEqual(zi.filename, 'myfile')
         self.checkRISCOS(zi,
-                         filename='myfile',
+                         filename=b'myfile',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -522,7 +522,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'NoName,ff9')
         self.assertFalse(bool(zi.internal_attr & 1), "Check for internal text flag")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
@@ -535,7 +535,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'NoName')
         self.assertTrue(bool(zi.internal_attr & 1), "Check for internal text flag")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
                          objtype=OBJTYPE_FILE,
@@ -548,7 +548,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'NoName')
         self.assertFalse(bool(zi.internal_attr & 1), "Check for internal text flag")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -561,7 +561,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'NoName/')
         self.assertTrue(bool(zi.external_attr & 16), "Check for msdos directory bit")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DIRECTORY,
                          objtype=OBJTYPE_DIRECTORY,
@@ -573,7 +573,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'NoName/')
         self.assertTrue(bool(zi.external_attr & 16), "Check for msdos directory bit")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DIRECTORY),
                          filetype=FILETYPE_DIRECTORY,
                          objtype=OBJTYPE_DIRECTORY,
@@ -590,7 +590,7 @@ class Test60RISCOSProperties(BaseTestCase):
         self.assertEqual(zi.filename, 'mydir')
         self.assertFalse(bool(zi.external_attr & 16), "Check for msdos directory bit")
         self.checkRISCOS(zi,
-                         filename='mydir',
+                         filename=b'mydir',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -603,7 +603,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertEqual(mode, 0, "Check for unix mode still unset")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -616,7 +616,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertEqual(mode, 0, "Check for unix mode still unset")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -629,7 +629,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertEqual(mode, 0, "Check for unix mode still unset")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -643,7 +643,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -657,7 +657,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertTrue(bool(mode & (0o444)), "Check for unix mode r-")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -671,7 +671,7 @@ class Test60RISCOSProperties(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertTrue(bool(mode & (0o222)), "Check for unix mode -w")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
@@ -691,7 +691,7 @@ class Test80ExtraFieldReading(BaseTestCase):
         mode = zi.external_attr >> 16
         self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
         self.checkRISCOS(zi,
-                         filename='NoName',
+                         filename=b'NoName',
                          loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,

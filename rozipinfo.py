@@ -2,31 +2,36 @@
 Management of the extension fields for RISC OS in ZipInfo objects.
 
 ZipInfo objects hold the information extracted from the Zip archives for a file.
-RISC OS extra fields in this ZipInfo are extractable using the ZipInfoRISCOS object.
+RISC OS extra fields in this ZipInfo are extractable using the `ZipInfoRISCOS`
+object.
 This object provides a way of extracting or storing the RISC OS extension data so
 that it can be used with Zip files.
 
-The ZipInfoRISCOS object is expected to be used just like the zipfile.ZipInfo
+The `ZipInfoRISCOS` object is expected to be used just like the `zipfile.ZipInfo`
 object, with the following extensions:
 
     * If read from a zip file, the extra field will automatically populate the
-      riscos_* properties.
-    * Any riscos_* properties which is updated will cause the base properties
+      `riscos_*` properties.
+    * Any `riscos_*` properties which is updated will cause the base properties
       to be updated. For example, updating the riscos_loadaddr will cause the
       date_time property to be updated to hold the new timestamp.
-    * If riscos_* properties are explicitly set, they will be inferred from
+    * If `riscos_*` properties are explicitly set, they will be inferred from
       the base properties.
-      * Load and Exec timestamps will be taken from the riscos_date_time
+      * RISC OS filename will be in a form for use within RISC OS, encoded
+        using `filename_encoding_name` as the encoding. `riscos_filename` is
+        a bytes (str on Python 2) object, whilst `filename` is always a
+        unicode object.
+      * Load and Exec timestamps will be taken from the `riscos_date_time`
         property.
-      * Load and Exec filetype will be taken from the riscos_filetype.
-      * The riscos_date_time property will be taken from the base date_time
+      * Load and Exec filetype will be taken from the `riscos_filetype`.
+      * The `riscos_date_time` property will be taken from the base `date_time`
         property, or from the Load and Exec timestamps if they were set.
       * Filetypes will be taken from the text flag, or may be inferred from
-        the filename (see the filetype_parentdir_mappings and
-        filetype_extension_mappings dictionaries for direct ways to extend
+        the filename (see the `filetype_parentdir_mappings` and
+        `filetype_extension_mappings` dictionaries for direct ways to extend
         this).
       * MimeMap may be queried before the internal extensions if this
-        is implemented (see filetype_from_extension method).
+        is implemented (see `filetype_from_extension` method).
       * Object types will be taken from the MS-DOS directory attribute, or
         the existance of a trailing '/' on the filename.
       * File attributes will be taken from the MS-DOS read-only attribute,
@@ -35,12 +40,12 @@ object, with the following extensions:
     * Once the individual RISC OS properties have been set, changing the
       base properties has no effect. This is largely to keep the amount of
       combinations down, and reduce complexity.
-    * If nfs_encoding is set, the RISC OS extra field will not be written,
+    * If `nfs_encoding` is set, the RISC OS extra field will not be written,
       but the filename will be updated to reflect the filetype and load/exec
       addresses, in line with the NFS extension usage. This is supported by
       the MiniZip/MiniUnzip tools, and by the InfoZip tools.
 
-How to use the nfs_encoding switch:
+How to use the `nfs_encoding` switch:
 
     * When reading an archive, commonly this should be enabled (the default),
       as this will use RISC OS extra field if present, and then fall back to
@@ -48,7 +53,7 @@ How to use the nfs_encoding switch:
       the inferrence from the filename and attributes.
 
     * When writing an archive, if the archive is intended for use on RISC OS,
-      the nfs_encoding should be disabled. This will allow the RISC OS extra
+      the `nfs_encoding` should be disabled. This will allow the RISC OS extra
       field to be written, as this preserves as much information as possible
       and doesn't require NFS extension translation on RISC OS systems.
 
@@ -58,6 +63,11 @@ How to use the nfs_encoding switch:
       RISC OS type and date information into the filename and date field.
       When extracted on RISC OS systems, the files will need to be manually
       translated, or use the MiniUnzip tool to extract the file information.
+
+Many of the functions of the processing for the translation to and from
+RISC OS formats are provided as separate methods within the ZipInfoRISCOS
+class. This should allow their replacement in custom implementations as
+necessary.
 """
 
 import datetime
@@ -68,7 +78,7 @@ import zipfile
 
 try:
     # Python 3: maketrans is a member of str
-    maketrans = str.maketrans
+    maketrans = bytes.maketrans
 
 except AttributeError:
     # Python 2: maketrans is a member of string
@@ -97,20 +107,20 @@ def tuple_to_datetime(date_time_tuple):
     Convert a broken down datetime to a quin (either zipinfo format or RISC OS format)
     """
     if len(date_time_tuple) == 6:
-        dt = datetime.datetime(date_time_tuple[0],
-                               date_time_tuple[1],
-                               date_time_tuple[2],
-                               date_time_tuple[3],
-                               date_time_tuple[4],
-                               date_time_tuple[5])
+        dt = datetime.datetime(int(date_time_tuple[0]),
+                               int(date_time_tuple[1]),
+                               int(date_time_tuple[2]),
+                               int(date_time_tuple[3]),
+                               int(date_time_tuple[4]),
+                               int(date_time_tuple[5]))
     elif len(date_time_tuple) == 7:
-        dt = datetime.datetime(date_time_tuple[0],
-                               date_time_tuple[1],
-                               date_time_tuple[2],
-                               date_time_tuple[3],
-                               date_time_tuple[4],
-                               date_time_tuple[5],
-                               date_time_tuple[6] * 1000)
+        dt = datetime.datetime(int(date_time_tuple[0]),
+                               int(date_time_tuple[1]),
+                               int(date_time_tuple[2]),
+                               int(date_time_tuple[3]),
+                               int(date_time_tuple[4]),
+                               int(date_time_tuple[5]),
+                               int(date_time_tuple[6]) * 1000)
     else:
         dt = None
     return dt
@@ -199,7 +209,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     nfs_encoding_hexdigits = '0123456789abcdef'
 
     # Translation for the string
-    exchange_dot_slash = maketrans('/.', './')
+    exchange_dot_slash = maketrans(b'/.', b'./')
 
     # Mappings for filename extensions (if no MimeMap implementation is present), lower case.
     filetype_extension_mappings = {
@@ -421,7 +431,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         dt = quin_to_datetime(quin)
         if dt:
             self.riscos_date_time = (dt.year, dt.month, dt.day,
-                                     dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
+                                     dt.hour, dt.minute, dt.second, int(dt.microsecond / 1000))
 
     def _update_nfs_encoding(self):
         """
@@ -661,33 +671,33 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         """
 
         # Make any attempt to inject system variables safe
-        name = name.replace('<', '(').replace('>', ')')
+        name = name.replace(b'<', b'(').replace(b'>', b')')
 
         # Remove any initial anchors
-        while name.startswith(('$.', '@.', '%.', '\\.', '&.', '^.')):
+        while name.startswith((b'$.', b'@.', b'%.', b'\\.', b'&.', b'^.')):
             name = name[2:]
 
         # Strip wildcards
-        name = name.replace('*', '(star)').replace('?', '(q)')
+        name = name.replace(b'*', b'(star)').replace(b'?', b'(q)')
 
         # Strip relative naming
-        name = name.replace('.^', '')
+        name = name.replace(b'.^', b'')
 
         # Other anchors anywhere else in the name will be invalid, so no need to make them safe
 
         # Prevent disc naming
-        name = name.replace(':', '--')
+        name = name.replace(b':', b'--')
 
         # Quotes aren't allowed in filenames either
-        name = name.replace('"', "'")
+        name = name.replace(b'"', b"'")
 
         # Prevent special field naming (may be overzealous here?)
-        name = name.replace('#', '(h)')
+        name = name.replace(b'#', b'(h)')
 
         # RISC OS names cannot start or end in a path separator
-        if name.startswith('.'):
+        if name.startswith(b'.'):
             name = name[1:]
-        if name.endswith('.'):
+        if name.endswith(b'.'):
             name = name[:-1]
 
         # At this point the filename will either be invalid, or safe for use without it going outside
@@ -756,7 +766,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             dt = quin_to_datetime(quin)
             if dt:
                 return (dt.year, dt.month, dt.day,
-                        dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
+                        dt.hour, dt.minute, dt.second, int(dt.microsecond / 1000))
 
         # Fall back to the standard format, with 0 for centiseconds
         return tuple(list(self.date_time) + [0])

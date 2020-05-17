@@ -4,10 +4,10 @@
 #
 
 
-test:
+test-python2:
   stage: unittest
   script:
-    - make tests
+    - make tests PYTHON=python2
   dependencies: []
   artifacts:
     when: always
@@ -15,7 +15,21 @@ test:
       - artifacts
     reports:
       junit:
-        - artifacts/test-results.xml
+        - artifacts/test-python2.xml
+
+
+test-python3:
+  stage: unittest
+  script:
+    - make tests PYTHON=python3
+  dependencies: []
+  artifacts:
+    when: always
+    paths:
+      - artifacts
+    reports:
+      junit:
+        - artifacts/test-python3.xml
 
 
 coverage:
@@ -27,10 +41,10 @@ coverage:
   coverage: '/^rozip.* (\d+(?:\.\d+)?)%.*$/'
 
 
-inttest:
+inttest-python2:
   stage: inttest
   script:
-    - make inttests
+    - make inttests PYTHON=python2
   dependencies: []
   artifacts:
     when: always
@@ -38,7 +52,21 @@ inttest:
       - artifacts
     reports:
       junit:
-        - artifacts/inttest.xml
+        - artifacts/inttest-python2.xml
+
+
+inttest-python3:
+  stage: inttest
+  script:
+    - make inttests PYTHON=python3
+  dependencies: []
+  artifacts:
+    when: always
+    paths:
+      - artifacts
+    reports:
+      junit:
+        - artifacts/inttest-python3.xml
 
 
 #### Stages to execute ####

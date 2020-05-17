@@ -2,7 +2,7 @@
 
 SHELL = /bin/bash
 PYTHON ?= python
-VENV ?= venv
+VENV ?= venv-${PYTHON}
 
 IN_VENV = source "${VENV}/bin/activate" &&
 
@@ -19,11 +19,11 @@ ${VENV}/marker:
 	source "${VENV}/bin/activate" && pip install -r requirements-test.txt
 	touch "${VENV}/marker"
 
-tests: setup
-	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html
+tests: setup artifacts
+	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html --xunit-file artifacts/test-${PYTHON}.xml
 
 inttests: artifacts
-	./test.pl --show-command --show-output --junitxml artifacts/inttest.xml ./showzip.py tests.txt
+	./test.pl --show-command --show-output --junitxml artifacts/inttest-${PYTHON}.xml "${PYTHON} showzip.py" tests.txt
 
 coverage: setup
 	-rm -rf .coverage

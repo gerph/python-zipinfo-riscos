@@ -3,7 +3,7 @@ File #0
   Unix date/time:        (2020, 5, 17, 16, 21, 51)
   MS DOS flags:          0x10
   Unix mode:             0o00000
-  RISC OS filename:      'testdir'
+  RISC OS filename:      testdir
   RISC OS date/time:     (2020, 5, 17, 16, 21, 51, 0)
   RISC OS load/exec:     0xfffffd58/0x7224b81c
   RISC OS filetype:      0x1000
@@ -15,7 +15,7 @@ File #1
   Unix date/time:        (2020, 5, 17, 17, 21, 18)
   MS DOS flags:          0x00
   Unix mode:             0o00000
-  RISC OS filename:      'testdir.data'
+  RISC OS filename:      testdir.data
   RISC OS date/time:     (2020, 5, 17, 17, 21, 18, 0)
   RISC OS load/exec:     0xfffffd58/0x722a2978
   RISC OS filetype:      0xffd
@@ -27,7 +27,7 @@ File #2
   Unix date/time:        (2020, 5, 17, 17, 19, 54)
   MS DOS flags:          0x00
   Unix mode:             0o00000
-  RISC OS filename:      'testdir.MiniZip'
+  RISC OS filename:      testdir.MiniZip
   RISC OS date/time:     (2020, 5, 17, 17, 19, 54, 0)
   RISC OS load/exec:     0xfffff858/0x722a08a8
   RISC OS filetype:      0xff8
@@ -39,7 +39,7 @@ File #3
   Unix date/time:        (2019, 12, 28, 0, 15, 52)
   MS DOS flags:          0x00
   Unix mode:             0o00000
-  RISC OS filename:      'testdir.swic'
+  RISC OS filename:      testdir.swic
   RISC OS date/time:     (2019, 12, 28, 0, 15, 52, 0)
   RISC OS load/exec:     0xfffffb58/0x292f69e0
   RISC OS filetype:      0xffb
@@ -51,9 +51,10 @@ File #4
   Unix date/time:        (2020, 5, 17, 17, 21, 38)
   MS DOS flags:          0x00
   Unix mode:             0o00000
-  RISC OS filename:      'testdir.text'
+  RISC OS filename:      testdir.text
   RISC OS date/time:     (2020, 5, 17, 17, 21, 38, 0)
   RISC OS load/exec:     0xffffff58/0x722a3148
   RISC OS filetype:      0xfff
   RISC OS attributes:    0x33
   RISC OS object type:   1
+

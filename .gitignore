@@ -1,10 +1,11 @@
 *.pyc
+__pycache__/*
 
 # Test files
 nosetests.xml
 cover
 .coverage
-venv
+venv-*
 
 # Artifacts
 artifacts
