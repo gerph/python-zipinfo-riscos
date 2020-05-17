@@ -832,10 +832,10 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             attr = 0x00
             # FIXME: Decide whether we should separate the 'you'/'others' into the
             #        'owner'/'others' permissions.
-            if self.external_attr & 0o222:
+            if (self.external_attr >> 16) & 0o222:
                 # One of the write permissions was set
                 attr |= 0x22
-            if self.external_attr & 0o444:
+            if (self.external_attr >> 16) & 0o444:
                 # One of the Read permissions was set
                 attr |= 0x11
             return attr
@@ -857,7 +857,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
                 # them with the new value - remove the write bit.
-                self.external_attr = self.external_attr & ~0o222
+                self.external_attr |= (0o222<<16)
         else:
             # Set readonly if no write permission
             self.external_attr = self.external_attr | self.external_attr_msdos_readonly
@@ -865,7 +865,20 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
                 # them with the new value - add the write bit.
-                self.external_attr = self.external_attr | 0o222
+                self.external_attr &= ~(0o222<<16)
+
+        if value & 0x11:
+            # Read flags in unix
+            if (self.external_attr & 0xFFFF0000):
+                # There are unix attributes set in the external_attr flags, so we should update
+                # them with the new value - remove the write bit.
+                self.external_attr |= (0o444<<16)
+        else:
+            if (self.external_attr & 0xFFFF0000):
+                # There are unix attributes set in the external_attr flags, so we should update
+                # them with the new value - add the write bit.
+                self.external_attr &= ~(0o444<<16)
+
         self._riscos_attr = value
         self._riscos_present = True
 

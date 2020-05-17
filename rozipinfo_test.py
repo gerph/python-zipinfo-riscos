@@ -41,6 +41,8 @@ OBJTYPE_FILE = 1
 OBJTYPE_DIRECTORY = 2
 
 ATTR_RW = 0x33
+ATTR_R = 0x11
+ATTR_W = 0x22
 
 
 # Ensure that the Coverage module is configured to instrument the package we
@@ -400,7 +402,96 @@ class Test40BaseProperties(BaseTestCase):
     Setting base properties
     """
     # FIXME: Not yet implemted as tests
-    pass
+
+    def test_001_filename(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.filename = "another-name"
+        self.checkRISCOS(zi,
+                         filename='another-name',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_020_datetime(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.date_time = TESTDATE
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_040_internalattr_text(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.internal_attr |= 1
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
+                         filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_060_externalattr_directory(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr |= 16
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DIRECTORY,
+                         objtype=OBJTYPE_DIRECTORY,
+                         attr=ATTR_RW)
+
+    def test_061_externalattr_readonly(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr |= 1
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_R)
+
+    def test_062_externalattr_unixattr_r_r_r_(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o444 << 16  # r--r--r--
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_R)
+
+    def test_063_externalattr_unixattr__w_w_w(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o222 << 16  # -w--w--w-
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_W)
+
+    def test_064_externalattr_unixattr_rwrwrw(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o666 << 16  # rw-rw-rw-
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_065_externalattr_unixattr_r_____(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o400 << 16  # r--------
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_R)
 
 
 class Test60RISCOSProperties(BaseTestCase):
@@ -489,6 +580,87 @@ class Test60RISCOSProperties(BaseTestCase):
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+
+    def test_060_attributes_rw_nounix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_attr = ATTR_RW
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertEqual(mode, 0, "Check for unix mode still unset")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_061_attributes_r_nounix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_attr = ATTR_R
+        self.assertTrue(bool(zi.external_attr & 1), "Check for msdos read only bit set")
+        mode = zi.external_attr >> 16
+        self.assertEqual(mode, 0, "Check for unix mode still unset")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_R)
+
+    def test_062_attributes_w_nounix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_attr = ATTR_W
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertEqual(mode, 0, "Check for unix mode still unset")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_W)
+
+    def test_070_attributes_rw_withunix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16
+        zi.riscos_attr = ATTR_RW
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_071_attributes_r_withunix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16
+        zi.riscos_attr = ATTR_R
+        self.assertTrue(bool(zi.external_attr & 1), "Check for msdos read only bit set")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool(mode & (0o444)), "Check for unix mode r-")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_R)
+
+    def test_072_attributes_w_withunix(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16
+        zi.riscos_attr = ATTR_W
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool(mode & (0o222)), "Check for unix mode -w")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_W)
 
 
 if __name__ == '__main__':
