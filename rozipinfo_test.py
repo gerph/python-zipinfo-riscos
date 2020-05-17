@@ -529,9 +529,7 @@ class Test60RISCOSProperties(BaseTestCase):
                          attr=ATTR_RW)
 
     def test_021_filetype_text(self):
-        """
-        Text filetype should set the text bit, so not need to have the explicit NFS extension.
-        """
+        # Text filetype should set the text bit, so not need to have the explicit NFS extension.
         zi = rozipinfo.ZipInfoRISCOS()
         zi.riscos_filetype = FILETYPE_TEXT
         self.assertEqual(zi.filename, 'NoName')
@@ -544,9 +542,7 @@ class Test60RISCOSProperties(BaseTestCase):
                          attr=ATTR_RW)
 
     def test_022_filetype_default(self):
-        """
-        Data filetype should clear the text bit, so not need to have the explicit NFS extension.
-        """
+        # Data filetype should clear the text bit, so not need to have the explicit NFS extension.
         zi = rozipinfo.ZipInfoRISCOS()
         zi.riscos_filetype = FILETYPE_DATA
         self.assertEqual(zi.filename, 'NoName')
@@ -559,9 +555,7 @@ class Test60RISCOSProperties(BaseTestCase):
                          attr=ATTR_RW)
 
     def test_023_filetype_directory(self):
-        """
-        Making it a directory should change the object type and the filename
-        """
+        # Making it a directory should change the object type and the filename
         zi = rozipinfo.ZipInfoRISCOS()
         zi.riscos_filetype = FILETYPE_DIRECTORY
         self.assertEqual(zi.filename, 'NoName/')

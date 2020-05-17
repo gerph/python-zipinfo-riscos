@@ -420,8 +420,6 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                                 execaddr=self.riscos_execaddr)
         dt = quin_to_datetime(quin)
         if dt:
-            self.date_time = (dt.year, dt.month, dt.day,
-                              dt.hour, dt.minute, dt.second)
             self.riscos_date_time = (dt.year, dt.month, dt.day,
                                      dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
 
@@ -750,13 +748,15 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     ################ Date/time
     @property
     def riscos_date_time(self):
-        # FIXME: Convert date_time object to RISC OS format
+        if self._riscos_date_time is not None:
+            return self._riscos_date_time
+
         if self._riscos_loadaddr is not None:
             quin = loadexec_to_quin(loadaddr=self._riscos_loadaddr, execaddr=self._riscos_execaddr or 0)
             dt = quin_to_datetime(quin)
-
-            return (dt.year, dt.month, dt.day,
-                    dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
+            if dt:
+                return (dt.year, dt.month, dt.day,
+                        dt.hour, dt.minute, dt.second, (dt.microsecond / 1000))
 
         # Fall back to the standard format, with 0 for centiseconds
         return tuple(list(self.date_time) + [0])
@@ -781,9 +781,12 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         # Convert time/filetype to RISC OS format
         if self._riscos_loadaddr is not None:
             # Load address exists.
-            if (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000:
+            if (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000 and self.riscos_filetype is not None:
                 # Can replace into the current load address
-                loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
+                if self.riscos_filetype == self.directory_filetype:
+                    loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.directory_filetype_internal << 8)
+                else:
+                    loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
                 return loadaddr
 
         if self.riscos_objtype == 1:
