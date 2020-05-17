@@ -44,6 +44,12 @@ ATTR_RW = 0x33
 ATTR_R = 0x11
 ATTR_W = 0x22
 
+EXTRA_TEST_FILE = bytes(bytearray.fromhex('41 43 20 00 41 52 43 30 '    # Header + length + ARC0
+                                          '58 fd ff ff '                # Load address
+                                          '60 ff e0 6b '                # Exec address
+                                          '33 00 00 00 '                # Attributes
+                                          '00 00 00 00'))               # Zero
+
 
 # Ensure that the Coverage module is configured to instrument the package we
 # care about (and to play nice with other people)
@@ -552,6 +558,21 @@ class Test60RISCOSProperties(BaseTestCase):
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 
+    def test_023_filetype_directory(self):
+        """
+        Making it a directory should change the object type and the filename
+        """
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.riscos_filetype = FILETYPE_DIRECTORY
+        self.assertEqual(zi.filename, 'NoName/')
+        self.assertTrue(bool(zi.external_attr & 16), "Check for msdos directory bit")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DIRECTORY,
+                         objtype=OBJTYPE_DIRECTORY,
+                         attr=ATTR_RW)
+
     def test_040_directory(self):
         zi = rozipinfo.ZipInfoRISCOS()
         zi.riscos_objtype = OBJTYPE_DIRECTORY
@@ -650,7 +671,7 @@ class Test60RISCOSProperties(BaseTestCase):
 
     def test_072_attributes_w_withunix(self):
         zi = rozipinfo.ZipInfoRISCOS()
-        zi.external_attr = 0o111 << 16
+        zi.external_attr = 0o111 << 16  # Force the external_attr for unix mode to be used
         zi.riscos_attr = ATTR_W
         self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
         mode = zi.external_attr >> 16
@@ -661,6 +682,26 @@ class Test60RISCOSProperties(BaseTestCase):
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_W)
+
+
+class Test80ExtraFieldReading(BaseTestCase):
+    """
+    Tests of the extra field
+    """
+
+    def test_001_reading(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16  # Force the external_attr for unix mode to be used
+        zi.extra = EXTRA_TEST_FILE
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
+        self.checkRISCOS(zi,
+                         filename='NoName',
+                         loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
 
 
 if __name__ == '__main__':

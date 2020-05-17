@@ -89,7 +89,7 @@ def quin_to_epochtime(quin):
 def quin_to_datetime(quin):
     if not quin:
         return None
-    return datetime.datetime.fromtimestamp(quin_to_epochtime(quin))
+    return datetime.datetime.utcfromtimestamp(quin_to_epochtime(quin))
 
 
 def tuple_to_datetime(date_time_tuple):
@@ -280,6 +280,31 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         self._nfs_encoding = nfs_encoding
 
+    def __repr__(self):
+        ro_load = '&{:08x}({})'.format(self.riscos_loadaddr, 'inferred' if self._riscos_loadaddr is None else 'set')
+        ro_exec = '&{:08x}({})'.format(self.riscos_execaddr, 'inferred' if self._riscos_execaddr is None else 'set')
+        ro_filetype = self.riscos_filetype
+        if ro_filetype == self.directory_filetype:
+            ro_filetype = 'dir'
+        elif ro_filetype == -1:
+            ro_filetype = 'none'
+        else:
+            ro_filetype = '&{:03x}'.format(ro_filetype)
+        ro_filetype = '{}({})'.format(ro_filetype, 'inferred' if self._riscos_filetype is None else 'set')
+        ro_objtype = '{}({})'.format(self.riscos_objtype, 'inferred' if self._riscos_objtype is None else 'set')
+        ro_attr = '&{:02x}({})'.format(self.riscos_attr, 'inferred' if self._riscos_attr is None else 'set')
+        ro_date_time = '{!r}({})'.format(self.riscos_date_time, 'inferred' if self._riscos_date_time is None else 'set')
+
+        ro_detail = 'load/exec={}/{}, filetype={}, attr={}, objtype={}, date={})>'.format(ro_load,
+                                                                                          ro_exec,
+                                                                                          ro_filetype,
+                                                                                          ro_attr,
+                                                                                          ro_objtype,
+                                                                                          ro_date_time)
+        return '<{}(filename={}; RO: {})>'.format(self.__class__.__name__,
+                                                  self.filename,
+                                                  ro_detail)
+
     @property
     def extra(self):
         """
@@ -336,7 +361,6 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         #   4 bytes: exec address (little endian)
         #   4 bytes: load address (little endian)
         #   4 bytes: attributes (little endian)
-        #   4 bytes: length (little endian)
         #   4 bytes: reserved for future expansion, 0 on write (little endian)
 
         chunks = self.extract_extra_fields(value or b'')
@@ -367,6 +391,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         while offset < len(extra) - 4:
             (header_id, data_length) = struct.unpack('<HH', extra[offset:offset + 4])
             chunks.append((header_id, extra[offset + 4:offset + 4 + data_length]))
+            offset += 4 + data_length
 
         return chunks
 
@@ -727,7 +752,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     def riscos_date_time(self):
         # FIXME: Convert date_time object to RISC OS format
         if self._riscos_loadaddr is not None:
-            quin = loadexec_to_quin(self._riscos_loadaddr, self._riscos_execaddr or 0)
+            quin = loadexec_to_quin(loadaddr=self._riscos_loadaddr, execaddr=self._riscos_execaddr or 0)
             dt = quin_to_datetime(quin)
 
             return (dt.year, dt.month, dt.day,
@@ -779,17 +804,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     def riscos_loadaddr(self, value):
         self._riscos_loadaddr = value
 
-        if self._riscos_objtype == 1:
-            # If this is a file, we can update the filetype
-            if self._riscos_loadaddr is not None and \
-               (self._riscos_loadaddr & 0xFFF00000) == 0xFFF00000:
-                # This object has a filetype
-                self._riscos_filetype = (value >> 8) & 0xFFF
-            else:
-                # No filetype set.
-                self._riscos_filetype = None
-        else:
-            self._riscos_filetype = self.directory_filetype
+        if self.riscos_objtype == 1:
+            # If this is a file, we can clear the filetype
+            self._riscos_filetype = None
         self._update_date_time()
 
         self._riscos_present = True
@@ -889,7 +906,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if self._riscos_filetype is not None:
             return self._riscos_filetype
 
-        if self.external_attr & self.external_attr_msdos_directory:
+        if self.riscos_objtype == 2:
             return self.directory_filetype
 
         # No filetype currently set, so we'll infer one.
@@ -903,10 +920,13 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 # present.
                 return -1
 
-        if self._riscos_loadaddr is not None and \
-           (self._riscos_loadaddr & 0xFFF00000) != 0xFFF00000:
-            # A load address has been supplied, and it's not a filetype.
-            return -1
+        if self._riscos_loadaddr is not None:
+            if (self._riscos_loadaddr & 0xFFF00000) != 0xFFF00000:
+                # A load address has been supplied, and it's not a filetype.
+                return -1
+            else:
+                # A load address has been supplied, and it includes a filetype
+                return (self._riscos_loadaddr >> 8) & 0xFFF
 
         # Call out to MimeMap to get the correct filetype for the name.
         if '.' in self.filename:
