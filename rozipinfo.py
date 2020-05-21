@@ -348,12 +348,18 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 if riscos_type == self.header_id_riscos_spark:
                     riscos_index = index
 
-        # We either have the index we need to modify, OR we know that we need to append it.
-        new_data = struct.pack('<IIII', self.riscos_loadaddr, self.riscos_execaddr, self.riscos_attr, 0)
-        if riscos_index is None:
-            chunks.append((self.header_id_riscos, new_data))
+        if self.nfs_encoding:
+            # We don't want the RISC OS information present, so we need to strip it from the fields.
+            if riscos_index is not None:
+                del chunks[riscos_index]
+
         else:
-            chunks[riscos_index] = (self.header_id_riscos, new_data)
+            # We're using RISC OS encoding, so add or modify the existing field
+            new_data = struct.pack('<IIIII', self.header_id_riscos_spark, self.riscos_loadaddr, self.riscos_execaddr, self.riscos_attr, 0)
+            if riscos_index is None:
+                chunks.append((self.header_id_riscos, new_data))
+            else:
+                chunks[riscos_index] = (self.header_id_riscos, new_data)
 
         value = self.build_extra_fields(chunks)
 
@@ -734,6 +740,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                     self._riscos_loadaddr = loadaddr
                     self._riscos_execaddr = execaddr
                     self._riscos_filetype = None
+                    self._riscos_present = True
                 elif filetype:
                     # Unless the extract_nfs_encoding is overridden, this should not happen.
                     self._riscos_loadaddr = None

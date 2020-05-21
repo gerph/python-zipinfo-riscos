@@ -44,11 +44,21 @@ ATTR_RW = 0x33
 ATTR_R = 0x11
 ATTR_W = 0x22
 
-EXTRA_TEST_FILE = bytes(bytearray.fromhex('41 43 20 00 41 52 43 30 '    # Header + length + ARC0
+EXTRA_TEST_FILE = bytes(bytearray.fromhex('41 43 14 00 41 52 43 30 '    # Header + length + ARC0
                                           '58 fd ff ff '                # Load address
                                           '60 ff e0 6b '                # Exec address
                                           '33 00 00 00 '                # Attributes
                                           '00 00 00 00'))               # Zero
+
+EXTRA_TEST_FILE_LOADEXEC = bytes(bytearray.fromhex('41 43 14 00 41 52 43 30 '    # Header + length + ARC0
+                                                   '78 56 34 12 '                # Load address
+                                                   '21 43 65 87 '                # Exec address
+                                                   '33 00 00 00 '                # Attributes
+                                                   '00 00 00 00'))               # Zero
+
+# UT Is interesting in that it seems to be generated with missing fields in the CD when created with infozip
+EXTRA_UT_TESTDATE = bytes(bytearray.fromhex('55 54 05 00 '              # Header + length
+                                            '03 18 5b b1 5e'))          # flags (3), 4 bytes of unix epoch timestamp
 
 
 # Ensure that the Coverage module is configured to instrument the package we
@@ -305,6 +315,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_002_filetype_suffix_invalid(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,fft')
@@ -315,6 +326,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_003_filetype_suffix_before_pathname(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9')
@@ -325,6 +337,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_004_loadexec_suffix(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201') # Note intentional + 1 to check it's real
@@ -335,6 +348,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_005_loadexec_suffix_untyped(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321')
@@ -345,6 +359,7 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          filetype=-1,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     #### Toggling tests, where we start with an NFS encoding, and then turn it off.
     def test_101_toggle_filetype_suffix(self):
@@ -468,6 +483,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_102_toggle_filetype_suffix_invalid(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='file,fft', nfs_encoding=False)
@@ -479,6 +495,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_103_toggle_filetype_suffix_before_pathname(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9', nfs_encoding=False)
@@ -490,6 +507,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_104_toggle_loadexec_suffix(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201', nfs_encoding=False) # Note intentional + 1 (to match enabled case)
@@ -501,6 +519,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
     def test_105_toggle_loadexec_suffix_untyped(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321', nfs_encoding=False)
@@ -512,6 +531,7 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filetype=-1,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+        self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
 
 class Test40BaseProperties(BaseTestCase):
@@ -791,7 +811,7 @@ class Test60RISCOSProperties(BaseTestCase):
 
 class Test80ExtraFieldReading(BaseTestCase):
     """
-    Tests of the extra field
+    Tests of the extra field - reading existing extra fields
     """
 
     def test_001_reading(self):
@@ -807,6 +827,60 @@ class Test80ExtraFieldReading(BaseTestCase):
                          filetype=FILETYPE_DATA,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
+
+    def test_002_arc0_ut(self):
+        # Check that we handle multiple fields - RISC OS first, then generic time
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16  # Force the external_attr for unix mode to be used
+        zi.extra = EXTRA_TEST_FILE + EXTRA_UT_TESTDATE
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
+        self.checkRISCOS(zi,
+                         filename=b'NoName',
+                         loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_003_ut_arc0(self):
+        # Check that we handle multiple fields - RISC OS first, then generic time
+        zi = rozipinfo.ZipInfoRISCOS()
+        zi.external_attr = 0o111 << 16  # Force the external_attr for unix mode to be used
+        zi.extra = EXTRA_TEST_FILE + EXTRA_UT_TESTDATE
+        self.assertFalse(bool(zi.external_attr & 1), "Check for msdos read only bit clear")
+        mode = zi.external_attr >> 16
+        self.assertTrue(bool((mode & 0o222) and mode & (0o444)), "Check for unix mode rw")
+        self.checkRISCOS(zi,
+                         filename=b'NoName',
+                         loadexec=build_loadexec(LOADADDR_TESTDATE, EXECADDR_TESTDATE),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+
+class Test81ExtraFieldWriting(BaseTestCase):
+    """
+    Tests of the extra field - writing extra fields
+    """
+
+    def test_001_empty(self):
+        zi = rozipinfo.ZipInfoRISCOS()
+        self.assertEqual(zi.extra, b'')
+
+    def test_002_from_nfs_encoding_filetype(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,ffd')
+        zi.external_attr = 0o666 << 16  # Force the external_attr for unix mode to be used
+        zi.date_time = TESTDATE
+        zi.nfs_encoding = False
+        self.assertEqual(zi.extra, EXTRA_TEST_FILE)
+
+    def test_003_from_nfs_encoding_loadexec(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,12345678,87654321')
+        zi.external_attr = 0o666 << 16  # Force the external_attr for unix mode to be used
+        zi.date_time = TESTDATE
+        zi.nfs_encoding = False
+        self.assertEqual(zi.extra, EXTRA_TEST_FILE_LOADEXEC)
 
 
 if __name__ == '__main__':
