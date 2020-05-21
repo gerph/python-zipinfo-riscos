@@ -296,7 +296,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 if field != 'extra':
                     setattr(self, field, getattr(zipinfo, field, None))
             # Always populate the extra field last, as this modifies the existing fields
-            # based on what the RISC OS extra field contains
+            # based on what the RISC OS extra field contains.
             self.extra = zipinfo.extra
 
         self._nfs_encoding = nfs_encoding
@@ -385,8 +385,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         #   0x30435241  SparkFS information (20 bytes)
         #
         # Format 0x30435241 ('ARC0') data:
-        #   4 bytes: exec address (little endian)
         #   4 bytes: load address (little endian)
+        #   4 bytes: exec address (little endian)
         #   4 bytes: attributes (little endian)
         #   4 bytes: reserved for future expansion, 0 on write (little endian)
 
@@ -397,6 +397,11 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 (riscos_type,) = struct.unpack('<I', data[:4])
                 if riscos_type == self.header_id_riscos_spark:
                     (loadaddr, execaddr, attr, zero) = struct.unpack('<IIII', data[4:])
+                    if self.riscos_objtype == 2:
+                        # If this is a directory, the load address is ALWAYS a timestamp; so we flag it as
+                        # such. Some archives are written with all 0s in the upper 24 bits of the word.
+                        loadaddr &= 0xFF
+                        loadaddr |= 0xFFF00000 | (self.directory_filetype_internal << 8)
                     self.riscos_loadaddr = loadaddr
                     self.riscos_execaddr = execaddr
                     self.riscos_attr = attr
