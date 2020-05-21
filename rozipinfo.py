@@ -71,8 +71,11 @@ necessary.
 """
 
 import datetime
+import os
+import stat
 import struct
 import sys
+import time
 import zipfile
 
 
@@ -84,6 +87,14 @@ except AttributeError:
     # Python 2: maketrans is a member of string
     import string
     maketrans = string.maketrans
+
+
+try:
+    unicode
+
+except NameError:
+    # Python 3, make unicode the str type
+    unicode = str
 
 
 unix_epoch_to_riscos_epoch = int(int(70*365.25) * 24*60*60)
@@ -338,7 +349,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                     riscos_index = index
 
         # We either have the index we need to modify, OR we know that we need to append it.
-        new_data = struct.pack('<IIIII', self.riscos_loadaddr, self.riscos_execaddr, self.riscos_attr, 0)
+        new_data = struct.pack('<IIII', self.riscos_loadaddr, self.riscos_execaddr, self.riscos_attr, 0)
         if riscos_index is None:
             chunks.append((self.header_id_riscos, new_data))
         else:
@@ -711,10 +722,17 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
     @nfs_encoding.setter
     def nfs_encoding(self, value):
-        if self._nfs_encoding != bool(value):
-            # FIXME: Update fields if necessary
-            pass
-        self._nfs_encoding = bool(value)
+        changed = self._nfs_encoding != bool(value)
+        if changed:
+            (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
+            self._nfs_encoding = bool(value)
+            if not self._nfs_encoding:
+                self.riscos_filename = name
+                if loadaddr:
+                    self.riscos_loadaddr = loadaddr
+                    self.riscos_execaddr = execaddr
+                if filetype:
+                    self.riscos_filetype = filetype
 
     ################ Filename
     @property
@@ -728,6 +746,12 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             # We don't care about those types here; just that the name has been extracted.
         else:
             name = self.filename
+            # WARNING:
+            # In Python 2 the filename is a unicode if the UTF-8 flag was set, and a str if not.
+            # In Python 3 the filename is always a unicode.
+            if not isinstance(name, unicode):
+                # Decode from cp437 to match zipfile's handling in Python 3.
+                name = name.decode('cp437')
 
         # The filename is in unicode format for self.filename.
         # RISC OS filename should be in the RISC OS locale, so first we need to encode the
@@ -745,15 +769,19 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         # Make it safe for use in the archive.
         riscos_filename = self.sanitise_riscos(value)
 
-        # Translate the RISC OS layout to unix layout
-        name = self.riscos_to_unix(riscos_filename)
-
-        # Decode the RISC OS filename into unicode for the Zip
-        name = self.decode_from_riscos(name)
-        # FIXME: Apply the NFS encoding.
-        self.filename = name
         self._riscos_filename = riscos_filename
         self._riscos_present = True
+
+        if self.nfs_encoding:
+            # We need to update the filename to reflect new parameters
+            self._update_nfs_encoding()
+        else:
+            # Swap the . and / around, and convert other characters
+            name = self.riscos_to_unix(riscos_filename)
+
+            # Change from RISC OS encoding to unicode
+            name = self.decode_from_riscos(name)
+            self.filename = name
 
     ################ Date/time
     @property
@@ -1033,8 +1061,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if self._riscos_objtype == 2:
             # The external attributes are defined to contain attributes based on the creator type.
             # However, most (all?) implementations treat the lower 8 bits as the MS DOS attributes,
-            # with only the top 16 bits being set to the unix mode (which is not defined in the
-            # pkzip spec.
+            # with the top 16 bits being set to the unix mode (which is not defined in the
+            # pkzip spec).
             # * InfoZip treats the amiga as special in creating with dedicated Amiga-only attributes.
             # * InfoZip checks if the top 16 bits are consistent with the write and directory
             #   bits, and if so uses them as the file mode.
@@ -1051,3 +1079,32 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             self.external_attr &= ~self.external_attr_msdos_directory
             if self.filename.endswith('/'):
                 self.filename = self.filename[:-1]
+
+    @classmethod
+    def from_file(cls, filename, arcname=None, nfs_encoding=True):
+        """
+        Read the ZipInfo parameters from a file on the filesystem.
+        Should be approximately equivalent to the class method with the same name in
+        Python 3.
+        """
+        st = os.stat(filename)
+        isdir = stat.S_ISDIR(st.st_mode)
+        mtime = time.gmtime(st.st_mtime)
+        date_time = mtime[0:6]
+        if arcname is None:
+            arcname = filename
+        arcname = os.path.normpath(os.path.splitdrive(arcname)[1])
+        while arcname[0] in (os.sep, os.altsep):
+            arcname = arcname[1:]
+
+        if isdir:
+            arcname += '/'
+
+        zinfo = cls(arcname, date_time)
+        zinfo.external_attr = (st.st_mode & 0xFFFF) << 16  # Unix attributes
+        if isdir:
+            zinfo.file_size = 0
+            zinfo.external_attr |= 0x10  # MS-DOS directory flag
+        else:
+            zinfo.file_size = st.st_size
+        return zinfo
