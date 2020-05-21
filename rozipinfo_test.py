@@ -346,6 +346,62 @@ class Test21FilenameNFSEncoding(BaseTestCase):
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 
+    #### Toggling tests, where we start with an NFS encoding, and then turn it off.
+    def test_101_toggle_filetype_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9')
+        zi.nfs_encoding = False
+        self.assertEqual(zi.filename, 'file')
+        self.checkRISCOS(zi,
+                         filename=b'file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_102_toggle_filetype_suffix_invalid(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,fft')
+        zi.nfs_encoding = False
+        self.assertEqual(zi.filename, 'file,fft')
+        self.checkRISCOS(zi,
+                         filename=b'file,fft',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_103_toggle_filetype_suffix_before_pathname(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9')
+        zi.nfs_encoding = False
+        self.assertEqual(zi.filename, 'c/file')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_104_toggle_loadexec_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201') # Note intentional + 1 to check it's real
+        zi.nfs_encoding = False
+        self.assertEqual(zi.filename, 'c/file')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE + 1, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_105_toggle_loadexec_suffix_untyped(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321')
+        zi.nfs_encoding = False
+        self.assertEqual(zi.filename, 'c/file')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(0x12345678, 0x87654321),
+                         filetype=-1,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
 
 class Test22FilenameNFSEncodingDisabled(BaseTestCase):
     """
@@ -399,6 +455,61 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
                          filename=b'c.file,12345678,87654321',
                          loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_TEXT),
                          filetype=FILETYPE_TEXT,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_101_toggle_filetype_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,ff9', nfs_encoding=False)
+        zi.nfs_encoding = True
+        self.assertEqual(zi.filename, 'file,ff9')
+        self.checkRISCOS(zi,
+                         filename=b'file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_102_toggle_filetype_suffix_invalid(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='file,fft', nfs_encoding=False)
+        zi.nfs_encoding = True
+        self.assertEqual(zi.filename, 'file,fft')
+        self.checkRISCOS(zi,
+                         filename=b'file,fft',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_DATA),
+                         filetype=FILETYPE_DATA,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_103_toggle_filetype_suffix_before_pathname(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,ff9', nfs_encoding=False)
+        zi.nfs_encoding = True
+        self.assertEqual(zi.filename, 'c/file,ff9')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_104_toggle_loadexec_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201', nfs_encoding=False) # Note intentional + 1 (to match enabled case)
+        zi.nfs_encoding = True
+        self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE + 1, filetype=FILETYPE_SPRITE),
+                         filetype=FILETYPE_SPRITE,
+                         objtype=OBJTYPE_FILE,
+                         attr=ATTR_RW)
+
+    def test_105_toggle_loadexec_suffix_untyped(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='c/file,12345678,87654321', nfs_encoding=False)
+        zi.nfs_encoding = True
+        self.assertEqual(zi.filename, 'c/file,12345678,87654321')
+        self.checkRISCOS(zi,
+                         filename=b'c.file',
+                         loadexec=build_loadexec(0x12345678, 0x87654321),
+                         filetype=-1,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)
 

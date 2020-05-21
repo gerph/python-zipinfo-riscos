@@ -727,11 +727,17 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             (name, loadaddr, execaddr, filetype) = self.extract_nfs_encoding(self.filename)
             self._nfs_encoding = bool(value)
             if not self._nfs_encoding:
-                self.riscos_filename = name
+                # We have a unix name, so we can now explicitly clear the RISC OS filename to use that.
+                self.filename = name
+                self._riscos_filename = None
                 if loadaddr:
-                    self.riscos_loadaddr = loadaddr
-                    self.riscos_execaddr = execaddr
-                if filetype:
+                    self._riscos_loadaddr = loadaddr
+                    self._riscos_execaddr = execaddr
+                    self._riscos_filetype = None
+                elif filetype:
+                    # Unless the extract_nfs_encoding is overridden, this should not happen.
+                    self._riscos_loadaddr = None
+                    self._riscos_execaddr = None
                     self.riscos_filetype = filetype
 
     ################ Filename
@@ -826,6 +832,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 else:
                     loadaddr = (self._riscos_loadaddr & 0xFFF000FF) | (self.riscos_filetype << 8)
                 return loadaddr
+            else:
+                return self._riscos_loadaddr
 
         if self.riscos_objtype == 1:
             # No load address given explicitly, so try to extract from NFS naming
@@ -843,11 +851,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
     @riscos_loadaddr.setter
     def riscos_loadaddr(self, value):
+        #print("Set loadaddr: %s, %08x" % (value, value))
         self._riscos_loadaddr = value
-
-        if self.riscos_objtype == 1:
-            # If this is a file, we can clear the filetype
-            self._riscos_filetype = None
+        self._riscos_filetype = None
         self._update_date_time()
 
         self._riscos_present = True
@@ -944,11 +950,11 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     @property
     def riscos_filetype(self):
         # Convert information to RISC OS file type
-        if self._riscos_filetype is not None:
-            return self._riscos_filetype
-
         if self.riscos_objtype == 2:
             return self.directory_filetype
+
+        if self._riscos_filetype is not None:
+            return self._riscos_filetype
 
         # No filetype currently set, so we'll infer one.
         if self.nfs_encoding:
