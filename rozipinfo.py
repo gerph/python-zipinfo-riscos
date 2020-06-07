@@ -44,6 +44,10 @@ object, with the following extensions:
       but the filename will be updated to reflect the filetype and load/exec
       addresses, in line with the NFS extension usage. This is supported by
       the MiniZip/MiniUnzip tools, and by the InfoZip tools.
+    * RISC OS filenames will have had unix unsafe names stripped from them,
+      so filenames like `../evil` will have been made safe as just `evil`.
+      To sanitise the `filename` property, assign the `riscos_filename` to
+      itself, which will make the RISC OS filename the canonical name.
 
 How to use the `nfs_encoding` switch:
 
@@ -72,6 +76,7 @@ necessary.
 
 import datetime
 import os
+import re
 import stat
 import struct
 import sys
@@ -221,6 +226,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
     # Translation for the string
     exchange_dot_slash = maketrans(b'/.', b'./')
+
+    # Path safety
+    sanitise_unix_relative_re = re.compile(br'[^/]+/\.\.(/|$)')
 
     # Mappings for filename extensions (if no MimeMap implementation is present), lower case.
     filetype_extension_mappings = {
@@ -653,6 +661,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         would be unsafe in a RISC OS filename.
         """
 
+        # Sanitise the Unix filename
+        name = cls.sanitise_unix(name)
+
         # Exchange the path/extension separators to be RISC OS format
         name = name.translate(cls.exchange_dot_slash)
 
@@ -677,6 +688,53 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
         # Exchange the path/extension separators to be RISC OS format
         name = name.translate(cls.exchange_dot_slash)
+        return name
+
+    @classmethod
+    def sanitise_unix(cls, name):
+        """
+        Ensure that the name we use on the unix side side is safe.
+
+        We remove or replace any sequences that would result in non-deterministic behaviour
+        on the unix side for the conversions. Essentially that means anchoring and relative
+        references.
+
+        @param name:    unix name to translate, as a bytes object
+
+        @return: Safe name to use for unix
+        """
+
+        name = name.lstrip(b'/')
+
+        # Multiple path separators are allowed on unix but reduce to a single separator
+        while b'//' in name:
+            name = name.replace(b'//', b'/')
+
+        # Current directory components are ignorable
+        name = name.replace(b'/./', b'/')
+        if name.startswith(b'./'):
+            name = name[2:]
+        if name.endswith(b'/.'):
+            name = name[:-2]
+
+        # Leading relative paths are junk.
+        while name.startswith(b'../'):
+            name = name[3:]
+
+        # Internal relative paths can be processed
+        while True:
+            (name, count) = cls.sanitise_unix_relative_re.subn(b'', name, count=1)
+            if count == 0:
+                break
+
+        # Bare directory specifications
+        if name == b'.' or name == b'..':
+            name = b''
+
+        # If we were left with nothing, give it a name
+        if name == b'':
+            name = b'root'
+
         return name
 
     @classmethod

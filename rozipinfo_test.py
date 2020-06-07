@@ -534,6 +534,72 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
         self.assertEqual(zi.extra, b'', 'Should be no extra field when using NFS encoding')
 
 
+class Test23FilenameBadCharacters(BaseTestCase):
+    """
+    Using bad characters in the unix filename.
+    """
+
+    def test_001_rooted(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='/myfile')
+        self.assertEqual(zi.filename, '/myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Rooting should be stripped')
+
+    def test_002_root_relative(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='/../myfile')
+        self.assertEqual(zi.filename, '/../myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Relative at the root should be stripped')
+
+    def test_003_rooted_multiply(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='//myfile')
+        self.assertEqual(zi.filename, '//myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Rooting should be stripped')
+
+    def test_004_root(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='/')
+        self.assertEqual(zi.filename, '/')
+        self.assertEqual(zi.riscos_filename, b'root', 'Rooting should be stripped')
+
+    def test_010_wd_relative(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='../myfile')
+        self.assertEqual(zi.filename, '../myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Relative at the WD should be stripped')
+
+    def test_011_wd_relative_multiple(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='../../myfile')
+        self.assertEqual(zi.filename, '../../myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Relative at the WD should be stripped')
+
+    def test_012_wd(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='.')
+        self.assertEqual(zi.filename, '.')
+        self.assertEqual(zi.riscos_filename, b'root', 'Current at the WD should be stripped')
+
+    def test_013_relative(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='..')
+        self.assertEqual(zi.filename, '..')
+        self.assertEqual(zi.riscos_filename, b'root', 'Relative at the WD should be stripped')
+
+    def test_020_relative_internal_suffix(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='mydir/..')
+        self.assertEqual(zi.filename, 'mydir/..')
+        self.assertEqual(zi.riscos_filename, b'root', 'Relative within path should be stripped')
+
+    def test_021_relative_internal_suffix_dir(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='mydir/../')
+        self.assertEqual(zi.filename, 'mydir/../')
+        self.assertEqual(zi.riscos_filename, b'root', 'Relative within path should be stripped')
+
+    def test_022_relative_internal_file(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='this/mydir/../myfile')
+        self.assertEqual(zi.filename, 'this/mydir/../myfile')
+        self.assertEqual(zi.riscos_filename, b'this.myfile', 'Relative within path should be stripped')
+
+    def test_023_relative_internal_file_multiply(self):
+        zi = rozipinfo.ZipInfoRISCOS(filename='this/mydir/../../myfile')
+        self.assertEqual(zi.filename, 'this/mydir/../../myfile')
+        self.assertEqual(zi.riscos_filename, b'myfile', 'Relative within path should be stripped')
+
+
 class Test40BaseProperties(BaseTestCase):
     """
     Setting base properties
