@@ -169,7 +169,7 @@ def datetime_to_quin(dt):
 def loadexec_to_quin(loadexec=None, loadaddr=None, execaddr=None):
     if loadexec:
         loadaddr = loadexec[0]
-        execaddr = loadexec[0]
+        execaddr = loadexec[1]
     if loadaddr and (loadaddr & 0xFFF00000) == 0xFFF00000:
         return ((loadaddr & 0xFF) << 32) | execaddr
     return None
