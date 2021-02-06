@@ -310,8 +310,12 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         self._nfs_encoding = nfs_encoding
 
     def __repr__(self):
-        ro_load = '&{:08x}({})'.format(self.riscos_loadaddr, 'inferred' if self._riscos_loadaddr is None else 'set')
-        ro_exec = '&{:08x}({})'.format(self.riscos_execaddr, 'inferred' if self._riscos_execaddr is None else 'set')
+        try:
+            ro_load = '&{:08x}({})'.format(self.riscos_loadaddr, 'inferred' if self._riscos_loadaddr is None else 'set')
+            ro_exec = '&{:08x}({})'.format(self.riscos_execaddr, 'inferred' if self._riscos_execaddr is None else 'set')
+        except Exception as exc:
+            ro_load = '<load/exec error: {}>'.format(exc)
+            ro_exec = '<load/exec error: {}>'.format(exc)
         ro_filetype = self.riscos_filetype
         if ro_filetype == self.directory_filetype:
             ro_filetype = 'dir'
@@ -322,7 +326,10 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         ro_filetype = '{}({})'.format(ro_filetype, 'inferred' if self._riscos_filetype is None else 'set')
         ro_objtype = '{}({})'.format(self.riscos_objtype, 'inferred' if self._riscos_objtype is None else 'set')
         ro_attr = '&{:02x}({})'.format(self.riscos_attr, 'inferred' if self._riscos_attr is None else 'set')
-        ro_date_time = '{!r}({})'.format(self.riscos_date_time, 'inferred' if self._riscos_date_time is None else 'set')
+        try:
+            ro_date_time = '{!r}({})'.format(self.riscos_date_time, 'inferred' if self._riscos_date_time is None else 'set')
+        except Exception as exc:
+            ro_date_time = '<date error: {}>'.format(exc)
 
         ro_detail = 'load/exec={}/{}, filetype={}, attr={}, objtype={}, date={})>'.format(ro_load,
                                                                                           ro_exec,
