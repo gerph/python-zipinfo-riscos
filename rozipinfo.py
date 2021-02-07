@@ -308,6 +308,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             self.extra = zipinfo.extra
 
         self._nfs_encoding = nfs_encoding
+        self.create_system = 13  # RISC OS
 
     def __repr__(self):
         try:
