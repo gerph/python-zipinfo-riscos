@@ -997,7 +997,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
-                # them with the new value - remove the write bit.
+                # them with the new value - add the write bit.
                 self.external_attr |= (0o222<<16)
         else:
             # Set readonly if no write permission
@@ -1005,19 +1005,19 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
-                # them with the new value - add the write bit.
+                # them with the new value - remove the write bit.
                 self.external_attr &= ~(0o222<<16)
 
         if value & 0x11:
             # Read flags in unix
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
-                # them with the new value - remove the write bit.
+                # them with the new value - add the read bit.
                 self.external_attr |= (0o444<<16)
         else:
             if (self.external_attr & 0xFFFF0000):
                 # There are unix attributes set in the external_attr flags, so we should update
-                # them with the new value - add the write bit.
+                # them with the new value - remove the read bit.
                 self.external_attr &= ~(0o444<<16)
 
         self._riscos_attr = value
