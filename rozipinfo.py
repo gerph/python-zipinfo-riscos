@@ -1153,6 +1153,14 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             #   bits are set in the whole word.
             # * Zipper treats the MSDOS bit as the directory specifier, regardless of creator.
             self.external_attr |= self.external_attr_msdos_directory
+
+            # Need to update the external attributes, if there were any set, to make the directory accessible
+            if (self.external_attr & 0xFFFF0000):
+                # Convert the 'read' attribute into an 'execute' attribute in the attributes
+                self.external_attr |= ((self.external_attr & (0o444<<16)) >> 2)
+                # Also make it writeable too; this seems to make sense for a RISC OS directory.
+                self.external_attr |= ((self.external_attr & (0o444<<16)) >> 1)
+
             # * InfoZip expects directories to be terminated by a '/' character; if they're not it
             #   doesn't mind, but the implication is that others may expect it.
             # * Python always generates names with a '/' on the end if they're marked as a directory.
