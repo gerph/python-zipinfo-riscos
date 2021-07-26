@@ -512,10 +512,11 @@ class Test22FilenameNFSEncodingDisabled(BaseTestCase):
     def test_104_toggle_loadexec_suffix(self):
         zi = rozipinfo.ZipInfoRISCOS(filename='c/file,fffff93a,c7524201', nfs_encoding=False) # Note intentional + 1 (to match enabled case)
         zi.nfs_encoding = True
-        self.assertEqual(zi.filename, 'c/file,fffff93a,c7524201')
+        self.assertEqual(zi.filename, 'c/file,ff9')
         self.checkRISCOS(zi,
                          filename=b'c.file',
-                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE + 1, filetype=FILETYPE_SPRITE),
+                         # The centiseconds aren't preserved.
+                         loadexec=build_loadexec(LOADADDR_BASEDATE, EXECADDR_BASEDATE, filetype=FILETYPE_SPRITE),
                          filetype=FILETYPE_SPRITE,
                          objtype=OBJTYPE_FILE,
                          attr=ATTR_RW)

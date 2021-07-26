@@ -17,19 +17,27 @@ object, with the following extensions:
       date_time property to be updated to hold the new timestamp.
     * If `riscos_*` properties are explicitly set, they will be inferred from
       the base properties.
-      * RISC OS filename will be in a form for use within RISC OS, encoded
-        using `filename_encoding_name` as the encoding. `riscos_filename` is
-        a bytes (str on Python 2) object, whilst `filename` is always a
-        unicode object.
-      * Load and Exec timestamps will be taken from the `riscos_date_time`
-        property.
-      * Load and Exec filetype will be taken from the `riscos_filetype`.
-      * The `riscos_date_time` property will be taken from the base `date_time`
+      * `riscos_filename` is the RISC OS filename. It will be in a form for
+        use within RISC OS, encoded using `filename_encoding_name` as the
+        encoding. It a bytes (str on Python 2) object, whilst `filename` is
+        always a unicode object.
+      * `riscos_date_time` contains the Load and Exec timestamps when present,
+        or it will be taken from the base `date_time` if no Load and Exec was
+        present.
+      * `riscos_filetype` contains the filetype, or -1 it none known.
         property, or from the Load and Exec timestamps if they were set.
       * Filetypes will be taken from the text flag, or may be inferred from
         the filename (see the `filetype_parentdir_mappings` and
         `filetype_extension_mappings` dictionaries for direct ways to extend
         this).
+      * `riscos_objtype` is the RISC OS object type if present, or synthesised
+        from other flags if not present. It will be 1 for files and 2 for
+        directories.
+      * `riscos_loadaddr` and `riscos_execaddr` contain the Load and Exec
+        address if present, or are synthesised from the timestamp and filetype
+        if not present.
+      * `riscos_attr` contains the RISC OS attributes if present, or
+        synthesised from the external attributes if not present
       * MimeMap may be queried before the internal extensions if this
         is implemented (see `filetype_from_extension` method).
       * Object types will be taken from the MS-DOS directory attribute, or
@@ -38,7 +46,7 @@ object, with the following extensions:
         and any unix attributes present in the upper 16bits of the external
         attributes.
     * Once the individual RISC OS properties have been set, changing the
-      base properties has no effect. This is largely to keep the amount of
+      base properties has no effect. This is largely to keep the number of
       combinations down, and reduce complexity.
     * If `nfs_encoding` is set, the RISC OS extra field will not be written,
       but the filename will be updated to reflect the filetype and load/exec
@@ -269,6 +277,14 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     # Internal attributes
     internal_attr_text = (1<<0)
     internal_attr_ebcdic = (1<<1)  # according to zipinfo
+
+    # RISC OS attributes
+    _riscos_attr_read = (1<<0)
+    _riscos_attr_write = (1<<1)
+    _riscos_attr_locked = (1<<3)
+    _riscos_attr_public_read = (1<<4)
+    _riscos_attr_public_write = (1<<5)
+    _riscos_attr_public_locked = (1<<6)
 
     _riscos_filename = None
     _riscos_date_time = None
@@ -817,6 +833,8 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                     self._riscos_loadaddr = None
                     self._riscos_execaddr = None
                     self.riscos_filetype = filetype
+            else:
+                self._update_nfs_encoding()
 
     ################ Filename
     @property
@@ -870,6 +888,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     ################ Date/time
     @property
     def riscos_date_time(self):
+        """
+        Date and time tuple, with an extra entry for microseconds.
+        """
         if self._riscos_date_time is not None:
             return self._riscos_date_time
 
@@ -880,14 +901,17 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 return (dt.year, dt.month, dt.day,
                         dt.hour, dt.minute, dt.second, int(dt.microsecond / 1000))
 
-        # Fall back to the standard format, with 0 for centiseconds
-        return tuple(list(self.date_time) + [0])
+        # Fall back to the standard format, with fractional part for centiseconds
+        return tuple([int(x) for x in self.date_time] + [(self.date_time[5] * 100) % 100])
 
     @riscos_date_time.setter
     def riscos_date_time(self, value):
         # Convert timestamp from RISC OS format to format for zipfile
         self._riscos_date_time = value
-        self.date_time = tuple(value[0:6])
+        if len(value) == 6:
+            self.date_time = tuple(value[0:5] + [value[5] + (value[6] / 100)])
+        else:
+            self.date_time = tuple(value[0:6])
 
         # If they had load/exec set, we need to update it with the new timestamp.
         if self._riscos_loadaddr is not None or \
@@ -1152,7 +1176,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             #   bits, and if so uses them as the file mode.
             # * Python treats the top 16 bits of the external attributes as the file mode if no
             #   bits are set in the whole word.
-            # * Zipper treats the MSDOS bit as the directory specifier, regardless of creator.
+            # * Zipper treats the MSDOS directory bit as the directory specifier, regardless of creator.
             self.external_attr |= self.external_attr_msdos_directory
 
             # Need to update the external attributes, if there were any set, to make the directory accessible
@@ -1173,7 +1197,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 self.filename = self.filename[:-1]
 
     @classmethod
-    def from_file(cls, filename, arcname=None, nfs_encoding=True):
+    def from_file(cls, filename, arcname=None, nfs_encoding=False):
         """
         Read the ZipInfo parameters from a file on the filesystem.
         Should be approximately equivalent to the class method with the same name in
@@ -1192,11 +1216,15 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         if isdir:
             arcname += '/'
 
-        zinfo = cls(arcname, date_time)
+        zinfo = cls(arcname, date_time, nfs_encoding=True)
         zinfo.external_attr = (st.st_mode & 0xFFFF) << 16  # Unix attributes
         if isdir:
             zinfo.file_size = 0
             zinfo.external_attr |= 0x10  # MS-DOS directory flag
         else:
             zinfo.file_size = st.st_size
+
+        # Finally set the encoding to the format requested, so that we get the encoding
+        # format they want to use.
+        zinfo.nfs_encoding = nfs_encoding
         return zinfo
