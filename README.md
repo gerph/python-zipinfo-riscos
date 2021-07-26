@@ -6,10 +6,17 @@ The `rozipinfo` module provides a subclass of ZipInfo which is able to both pars
 
 The `rozipfile` module builds on the `rozipinfo` module to allow the files to be extracted or created as a simple operation. It provide both a programatic and command line interface.
 
+## Installing
+
+The modules may be installed by copying them to where you need them, or through the package
+manager:
+
+    pip install rozipinfo
+
 ## `rozipinfo`
 
 The `rozipinfo` module provides decoding for the RISC OS specific extra fields in the Zip Archives.
-It can be used standalone as a module to convert the standard `zipfile.ZipInfo` objects into objects that can be . It has not been added to PyPI yet.
+It can be used standalone as a module to convert the standard `zipfile.ZipInfo` objects into objects that have RISC OS properties extracted from the Zip file's extra field.
 
 ### Features
 
