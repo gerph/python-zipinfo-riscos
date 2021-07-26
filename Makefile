@@ -28,3 +28,6 @@ inttests: artifacts
 coverage: setup
 	-rm -rf .coverage
 	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html
+
+package: tests inttests
+	./package.sh
