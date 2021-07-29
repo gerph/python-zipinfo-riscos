@@ -131,7 +131,7 @@ class RISCOSZipFile(object):
         # Having written this directory, we now need to write each of the objects within it.
         for name in os.listdir(filename):
             new_filename = os.path.join(filename, name)
-            self.add_to_zipfile(new_filename)
+            self.add_to_zipfile(new_filename, verbose=verbose)
 
     def add_to_zipfile(self, filename, verbose=False):
         if os.path.isfile(filename):
