@@ -216,7 +216,7 @@ class RISCOSZipFile(object):
         dt = rozipinfo.tuple_to_datetime(dt)
         # RISC OS format string is: '%24:%MI:%SE %DY-%M3-%CE%YR'
         # strftime format string is: '%H:%M%:%S %d-%b-%Y'
-        return dt.strftime('%H:%M%:%S %d-%b-%Y')
+        return dt.strftime('%H:%M:%S %d-%b-%Y')
 
     def _describe_filesize(self, value, fixed=False):
         """
@@ -253,10 +253,10 @@ class RISCOSZipFile(object):
         longest_name = 10
 
         for zi in files:
-            if '.' in zi.riscos_filename:
-                dirname, leafname = zi.riscos_filename.rsplit('.', 1)
+            if b'.' in zi.riscos_filename:
+                dirname, leafname = zi.riscos_filename.rsplit(b'.', 1)
             else:
-                dirname = ''
+                dirname = b''
                 leafname = zi.riscos_filename
             if dirname not in dirs:
                 dirs[dirname] = {}
@@ -272,7 +272,12 @@ class RISCOSZipFile(object):
                     loadexec_datetime = self._describe_loadexec(zi.riscos_loadaddr, zi.riscos_execaddr)
                 else:
                     loadexec_datetime = self._describe_datetime(zi.riscos_date_time)
-                print("{:{}} {:9} {:<10} {:>20} {}".format(zi.riscos_filename,
+                name = zi.riscos_filename
+                try:
+                    name = name.decode('ascii')
+                except UnicodeDecodeError:
+                    name = repr(name)
+                print("{:{}} {:9} {:<10} {:>20} {}".format(name,
                                                            longest_name,
                                                            self._describe_attributes(zi.riscos_attr, zi.riscos_objtype),
                                                            self._describe_filetype(zi.riscos_filetype, zi.riscos_objtype),
