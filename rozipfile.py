@@ -114,7 +114,7 @@ class RISCOSZipFile(object):
         zi.nfs_encoding = False
         if verbose:
             self.verbose_object(zi)
-        with open(filename, 'r') as fh:
+        with open(filename, 'rb') as fh:
             data = fh.read()
         self.zh.writestr(zi, data)
 
