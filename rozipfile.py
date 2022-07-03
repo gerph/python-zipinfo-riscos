@@ -340,6 +340,9 @@ class RISCOSZipFile(object):
                 os.makedirs(filename)
         else:
             content = self.read(zi)
+            dirname = os.path.dirname(filename)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
             with open(filename, 'wb') as fh:
                 fh.write(content)
 
