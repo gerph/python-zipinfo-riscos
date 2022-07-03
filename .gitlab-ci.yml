@@ -3,6 +3,9 @@
 #    Prefix any job name with a '.' to disable.
 #
 
+variables:
+  LC_ALL: C.UTF-8
+
 
 test-python2:
   stage: unittest

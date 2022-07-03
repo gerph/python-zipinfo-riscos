@@ -412,12 +412,12 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         except Exception as exc:
             ro_date_time = '<date error: {}>'.format(exc)
 
-        ro_detail = 'load/exec={}/{}, filetype={}, attr={}, objtype={}, date={})>'.format(ro_load,
-                                                                                          ro_exec,
-                                                                                          ro_filetype,
-                                                                                          ro_attr,
-                                                                                          ro_objtype,
-                                                                                          ro_date_time)
+        ro_detail = 'load/exec={}/{}, filetype={}, attr={}, objtype={}, date={}'.format(ro_load,
+                                                                                        ro_exec,
+                                                                                        ro_filetype,
+                                                                                        ro_attr,
+                                                                                        ro_objtype,
+                                                                                        ro_date_time)
         return '<{}(filename={!r}; RO: {})>'.format(self.__class__.__name__,
                                                     self.filename,
                                                     ro_detail)
