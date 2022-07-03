@@ -1,0 +1,36 @@
+File #0
+  Unix filename:         'testfile'
+  Unix date/time:        (2020, 5, 5, 13, 24, 56)
+  MS DOS flags:          0x00
+  Unix mode:             0o100664
+  RISC OS filename:      'testfile'
+  RISC OS date/time:     (2020, 5, 5, 13, 24, 56, 0)
+  RISC OS load/exec:     0xfffffd58/0x6be67da0
+  RISC OS filetype:      0xffd
+  RISC OS attributes:    0x33
+  RISC OS object type:   1
+
+File #1
+  Unix filename:         'c/main'
+  Unix date/time:        (2022, 7, 3, 21, 39, 46)
+  MS DOS flags:          0x00
+  Unix mode:             0o100664
+  RISC OS filename:      'c.main'
+  RISC OS date/time:     (2022, 7, 3, 21, 39, 46, 0)
+  RISC OS load/exec:     0xffffff5a/0x02665948
+  RISC OS filetype:      0xfff
+  RISC OS attributes:    0x33
+  RISC OS object type:   1
+
+File #2
+  Unix filename:         'gerph-black.png'
+  Unix date/time:        (2022, 7, 3, 21, 42, 22)
+  MS DOS flags:          0x00
+  Unix mode:             0o100644
+  RISC OS filename:      'gerph-black/png'
+  RISC OS date/time:     (2022, 7, 3, 21, 42, 22, 0)
+  RISC OS load/exec:     0xfffffd5a/0x02669638
+  RISC OS filetype:      0xffd
+  RISC OS attributes:    0x33
+  RISC OS object type:   1
+

@@ -21,13 +21,14 @@ It can be used standalone as a module to convert the standard `zipfile.ZipInfo` 
 ### Features
 
 * Supports reading RISC OS style file properties, synthesised if necessary:
-    * `riscos_filename`: RISC OS format filename
+    * `riscos_filename`: RISC OS format filename, a `bytes` object in the configured encoding
     * `riscos_date_time`: tuple like `date_time`, but with centiseconds on the end
     * `riscos_objtype`: File or directory object type
     * `riscos_loadaddr`: Load address
     * `riscos_execaddr`: Exec address
     * `riscos_filetype`: RISC OS filetype number
     * `riscos_attr`: RISC OS attributes value
+* Forces the `filename` to be unicode, having been decoded using the archive's encoding.
 * All properties are mutable, and cause the extra field to be regenerated, updating the base properties as needed.
 * Supports reading and writing the extra field, or using the NFS filename encoding format for transfer to other platforms.
 * Configurable (by subclassing) encoding used for RISC OS filenames.
@@ -108,6 +109,10 @@ Creating an archive:
 Extracting an archive:
 
     python -m rozipfile [--chdir <dir>] --extract <archive> <files>*
+
+### Default filetype
+
+The default filetype for files that don't have any RISC OS extension information present (either as NFS-encoding or RISC OS extensions) is &FFD (Data). However, the switch `--default-filetype` can be used to default to a different type. Most commonly you may wish to set the default filetype to Text with `--default-filetype text`.
 
 
 ## Tests

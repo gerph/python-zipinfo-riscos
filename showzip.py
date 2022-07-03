@@ -5,6 +5,7 @@ Small script to just print a list of what's in a zip archive using the ZipInfoRI
 
 from __future__ import print_function
 
+import argparse
 import re
 import sys
 import zipfile
@@ -38,17 +39,38 @@ def present_riscos(name):
     else:
         return "'" + value.decode('ascii') + "'"
 
+def riscos_type(value):
+    return int(value, 16)
 
-if len(sys.argv[1]) < 0:
-    sys.exit("Syntax: {} <zip file>".format(sys.argv[0]))
 
-zip_filename = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help="Output more information during processing")
+parser.add_argument('-T', '--default-filetype', type=riscos_type,
+                    help="Default filetype to use for files without type")
+parser.add_argument('zipfile',
+                    help="Zip file to display contents of")
+
+options = parser.parse_args()
+
+zip_filename = options.zipfile
+
+
+cls_zipinfo = rozipinfo.ZipInfoRISCOS
+if options.default_filetype is not None:
+    class ZipInfoRISCOSCustom(rozipinfo.ZipInfoRISCOS):
+        pass
+    ZipInfoRISCOSCustom.default_filetype = options.default_filetype
+    cls_zipinfo = ZipInfoRISCOSCustom
+
 
 with zipfile.ZipFile(zip_filename, 'r') as zh:
 
     for index, zi in enumerate(zh.infolist()):
-        zi = rozipinfo.ZipInfoRISCOS(zipinfo=zi)
+        zi = cls_zipinfo(zipinfo=zi)
         print("File #{}".format(index))
+        if options.verbose:
+            print("  ZipInfo:               {!r}".format(zi))
         print("  Unix filename:         {}".format(present_unicode(zi.filename)))
         print("  Unix date/time:        {!r}".format(zi.date_time))
         print("  MS DOS flags:          0x{:02x}".format(zi.external_attr & 0xFF))

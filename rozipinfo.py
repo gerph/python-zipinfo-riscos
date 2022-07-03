@@ -378,7 +378,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
 
             # They wanted to pre-populate from an existing ZipInfo object.
             # Use the __slots__ element because this gives all the fields it supports.
-            # If the implmentation changes, more consideration to reading the source
+            # If the implementation changes, more consideration to reading the source
             # object will be required.
             for field in zipinfo.__class__.__slots__:
                 if field != 'extra' and field != 'filename':

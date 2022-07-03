@@ -1,0 +1,49 @@
+#
+# SUT:    rozipinfo
+# Area:   ROZipFile tool
+# Class:  Functional
+# Type:   Integration test
+#
+
+Group: List archives
+
+Command: $TOOL -m rozipfile --list $ARG1
+Expect: testexpect/rozipfile-$ARG2.txt
+
+Test: Zip with NFS-naming
+Args: testdata/testdir-unix.zip unix
+
+Test: Zip with RISC OS fields
+Args: testdata/testdir-ro.zip ro
+
+Test: Zip with RISC OS encoding
+Args: testdata/testtbs.zip ro-latin1
+
+Test: Zip without RISC OS or NFS names
+Args: testdata/testdir-nonro.zip nonro
+
+Test: Zip without RISC OS or NFS names (default type)
+Command: $TOOL -m rozipfile --default-filetype fff --list $ARG1
+Args: testdata/testdir-nonro.zip nonro-text
+
+
+Group: List archives (verbose)
+
+Command: $TOOL -m rozipfile --verbose --list $ARG1
+Expect: testexpect/rozipfile-verbose-$ARG2.txt
+
+Test: Zip with NFS-naming
+Args: testdata/testdir-unix.zip unix
+
+Test: Zip with RISC OS fields
+Args: testdata/testdir-ro.zip ro
+
+Test: Zip with RISC OS encoding
+Args: testdata/testtbs.zip ro-latin1
+
+Test: Zip without RISC OS or NFS names
+Args: testdata/testdir-nonro.zip nonro
+
+Test: Zip without RISC OS or NFS names (default type)
+Command: $TOOL -m rozipfile --verbose --default-filetype fff --list $ARG1
+Args: testdata/testdir-nonro.zip nonro-text

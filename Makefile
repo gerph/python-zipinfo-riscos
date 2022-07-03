@@ -23,7 +23,7 @@ tests: setup artifacts
 	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html --xunit-file artifacts/test-${PYTHON}.xml
 
 inttests: artifacts
-	./test.pl --show-command --show-output --junitxml artifacts/inttest-${PYTHON}.xml "${PYTHON} showzip.py" tests.txt
+	./test.pl --show-command --show-output --junitxml artifacts/inttest-${PYTHON}.xml "${PYTHON}" tests.txt
 
 coverage: setup
 	-rm -rf .coverage

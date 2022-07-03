@@ -1,0 +1,5 @@
+testdir         DWR/      Directory  16:21:51 17-May-2020    0 bytes
+testdir.data    WR/       Data       16:21:18 17-May-2020    0 bytes
+testdir.MiniZip WR/       Absolute   16:19:55 17-May-2020    9Kbytes
+testdir.swic    WR/       BASIC      23:15:52 27-Dec-2019    2Kbytes
+testdir.text    WR/       Text       16:21:39 17-May-2020    0 bytes

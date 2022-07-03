@@ -21,10 +21,15 @@ Command line tool allows:
 
 import argparse
 import os
+import re
 import sys
 import zipfile
 
 import rozipinfo
+
+
+class RISCOSZipFileError(Exception):
+    pass
 
 
 class RISCOSZipFile(object):
@@ -76,11 +81,35 @@ class RISCOSZipFile(object):
             0x1C9: 'DiagData',
             0x132: 'ICO',
         }
+    inv_named_types = dict((name.lower(), filetype) for filetype, name in named_types.items())
+    cls_zipinfo = rozipinfo.ZipInfoRISCOS
 
-    def __init__(self, zip_filename, mode='r', base_dir='.'):
+    escapable_re = re.compile(br'[\x00-\x1f\x7f-\xff]')
+
+    def __init__(self, zip_filename, mode='r', base_dir='.', default_filetype=None):
         self.zip_filename = zip_filename
         self.mode = mode
         self.zh = zipfile.ZipFile(zip_filename, mode)
+        if default_filetype:
+            if default_filetype in self.inv_named_types:
+                # It's a named type
+                default_filetype = self.inv_named_types[default_filetype.lower()]
+            else:
+                if default_filetype[0] == '&':
+                    default_filetype = default_filetype[1:]
+                try:
+                    file_type = int(default_filetype, 16)
+                    default_filetype = file_type
+                except ValueError:
+                    raise RISCOSZipFileError("Unrecognised default filetype '{}'".format(default_filetype))
+        self.default_filetype = default_filetype
+
+        if self.default_filetype:
+            class ZipInfoRISCOSCustom(self.cls_zipinfo):
+                pass
+            ZipInfoRISCOSCustom.default_filetype = default_filetype
+            self.cls_zipinfo = ZipInfoRISCOSCustom
+
         self.base_dir = os.path.abspath(base_dir)
         self._fileslist = None
         self._namesdict = None
@@ -100,8 +129,12 @@ class RISCOSZipFile(object):
         if zi.riscos_objtype == 2:
             self.verbose("Directory {!r}".format(zi.riscos_filename))
         else:
+            type_name = None
             if zi.riscos_filetype != -1:
                 filetype = 'type &{:03X}'.format(zi.riscos_filetype)
+                type_name = self._lookup_filetype(zi.riscos_filetype)
+                if type_name is not None:
+                    filetype += ' ({})'.format(type_name)
             else:
                 filetype = 'load/exec &{:08X}/&{:08X}'.format(zi.riscos_loadaddr, zi.riscos_execaddr)
             self.verbose("File {!r}, size {} bytes, {}".format(zi.riscos_filename,
@@ -110,7 +143,7 @@ class RISCOSZipFile(object):
 
     def add_file(self, filename, verbose=False):
         zipname = os.path.relpath(filename, self.base_dir)
-        zi = rozipinfo.ZipInfoRISCOS.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
+        zi = self.cls_zipinfo.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
         zi.nfs_encoding = False
         if verbose:
             self.verbose_object(zi)
@@ -118,10 +151,9 @@ class RISCOSZipFile(object):
             data = fh.read()
         self.zh.writestr(zi, data)
 
-
     def add_dir(self, filename, verbose=False):
         zipname = os.path.relpath(filename, self.base_dir)
-        zi = rozipinfo.ZipInfoRISCOS.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
+        zi = self.cls_zipinfo.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
         zi.nfs_encoding = False
         self.zh.writestr(zi, b'')
 
@@ -156,7 +188,7 @@ class RISCOSZipFile(object):
         Return ZipInfo items for each member of the archive.
         """
         if self._fileslist is None:
-            self._fileslist = [rozipinfo.ZipInfoRISCOS(zipinfo=zi, nfs_encoding=False) for zi in self.zh.infolist()]
+            self._fileslist = [self.cls_zipinfo(zipinfo=zi, nfs_encoding=False) for zi in self.zh.infolist()]
 
         return self._fileslist
 
@@ -195,6 +227,9 @@ class RISCOSZipFile(object):
 
         return ''.join(label)
 
+    def _lookup_filetype(self, filetype):
+        return self.named_types.get(filetype, None)
+
     def _describe_filetype(self, filetype, objtype):
         if objtype == 2:
             return 'Directory'
@@ -202,7 +237,7 @@ class RISCOSZipFile(object):
         if filetype == -1:
             return 'Untyped'
 
-        val = self.named_types.get(filetype, None)
+        val = self._lookup_filetype(filetype)
         if not val:
             val = '&{:3X}'.format(filetype)
         return val
@@ -244,6 +279,39 @@ class RISCOSZipFile(object):
         """
         return "{:08X} {:08X}".format(loadaddr, execaddr)
 
+    def _present_native_name(self, name, quoted=False):
+        """
+        Presentation format for the Unicode native filenames, in verbose output
+        """
+        if sys.version_info.major == 2:
+            name = name.encode('utf-8')
+        if quoted:
+            value = "'" + name.replace("'", "\\'") + "'"
+        return value
+
+    def _present_riscos_name(self, name, quoted=False):
+        """
+        Presentation format for the RISC OS filenames, used in verbose output
+        """
+        name = name.replace(b'\\', b'\\\\')
+        value = self.escapable_re.sub(lambda s: b'\\x%02x' % (ord(s.group(0))), name)
+
+        if sys.version_info.major != 2:
+            value = value.decode('ascii')
+        if quoted:
+            return "'" + value.replace("'", "\\'") + "'"
+        return value
+
+    def _listing_riscos_name(self, zi):
+        """
+        Name for the listing of the RISC OS name.
+        """
+        if sys.version_info.major == 2:
+            value = zi.riscos_filename.decode(zi.filename_encoding_name).encode('utf-8')
+        else:
+            value = zi.riscos_filename.decode(zi.filename_encoding_name)
+        return value
+
     def printdir(self):
         """
         Print the files from the archive.
@@ -261,7 +329,8 @@ class RISCOSZipFile(object):
             if dirname not in dirs:
                 dirs[dirname] = {}
             dirs[dirname][leafname] = zi
-            longest_name = max(len(zi.riscos_filename), longest_name)
+            name = zi.riscos_filename.decode(zi.filename_encoding_name)
+            longest_name = max(len(name), longest_name)
 
         # Now print them in order
         for dirname, items in sorted(dirs.items(), key=lambda d: d[0].lower()):
@@ -272,17 +341,15 @@ class RISCOSZipFile(object):
                     loadexec_datetime = self._describe_loadexec(zi.riscos_loadaddr, zi.riscos_execaddr)
                 else:
                     loadexec_datetime = self._describe_datetime(zi.riscos_date_time)
-                name = zi.riscos_filename
-                try:
-                    name = name.decode('ascii')
-                except UnicodeDecodeError:
-                    name = repr(name)
-                print("{:{}} {:9} {:<10} {:>20} {}".format(name.encode('utf-8'),
-                                                           longest_name,
-                                                           self._describe_attributes(zi.riscos_attr, zi.riscos_objtype),
-                                                           self._describe_filetype(zi.riscos_filetype, zi.riscos_objtype),
-                                                           loadexec_datetime,
-                                                           self._describe_filesize(zi.file_size, fixed=True)))
+                name = zi.riscos_filename.decode(zi.filename_encoding_name)
+                padding = ' ' * (longest_name - len(name))
+                if sys.version_info.major == 2:
+                    name = name.encode('utf-8')
+                print("{}{} {:9} {:<10} {:>20} {}".format(name, padding,
+                                                          self._describe_attributes(zi.riscos_attr, zi.riscos_objtype),
+                                                          self._describe_filetype(zi.riscos_filetype, zi.riscos_objtype),
+                                                          loadexec_datetime,
+                                                          self._describe_filesize(zi.file_size, fixed=True)))
 
     def printdir_verbose(self):
         """
@@ -291,12 +358,12 @@ class RISCOSZipFile(object):
         for index, zi in enumerate(self.infolist()):
             print("File #{}".format(index))
             # Filename is always in unicode format, so always print it as UTF-8.
-            print("  Unix filename:         {!r}".format(zi.filename.encode('utf-8')))
+            print("  Unix filename:         {}".format(self._present_native_name(zi.filename, quoted=True)))
             print("  Unix date/time:        {!r}".format(zi.date_time))
             print("  MS DOS flags:          &{:02x}".format(zi.external_attr & 0xFF))
             print("  Unix mode:             8_{:05o}".format(zi.external_attr>>16))
 
-            print("  RISC OS filename:      {}".format(zi.riscos_filename.decode('latin-1')))
+            print("  RISC OS filename:      {}".format(self._present_riscos_name(zi.riscos_filename, quoted=True)))
             print("  RISC OS date/time:     {!r}".format(zi.riscos_date_time))
             print("  RISC OS load/exec:     &{:08x}/&{:08x}".format(zi.riscos_loadaddr, zi.riscos_execaddr))
             if zi.riscos_filetype == -1:
@@ -366,6 +433,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Output more information during processing")
+    parser.add_argument('-T', '--default-filetype', default=None,
+                        help="Default filetype to use for files without type")
     parser.add_argument('-C', '--chdir', default='.',
                         help="Base directory for the reading or writing files")
     parser.add_argument('-c', '--create', action='store_true',
@@ -383,27 +452,32 @@ def main():
 
     zip_filename = os.path.abspath(options.zipfile)
 
-    if options.create:
-        with RISCOSZipFile(zip_filename, 'w', base_dir=options.chdir) as rzh:
+    try:
+        if options.create:
+            with RISCOSZipFile(zip_filename, 'w', base_dir=options.chdir, default_filetype=options.default_filetype) as rzh:
 
-            options.chdir = os.path.abspath(options.chdir)
-            for filename in options.content:
-                rzh.add_to_zipfile(filename, verbose=options.verbose)
+                options.chdir = os.path.abspath(options.chdir)
+                for filename in options.content:
+                    rzh.add_to_zipfile(filename, verbose=options.verbose)
 
-    elif options.list:
-        with RISCOSZipFile(zip_filename, 'r') as zh:
-            if options.verbose:
-                zh.printdir_verbose()
-            else:
-                zh.printdir()
+        elif options.list:
+            with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
+                if options.verbose:
+                    zh.printdir_verbose()
+                else:
+                    zh.printdir()
 
-    elif options.extract:
-        with RISCOSZipFile(zip_filename, 'r') as zh:
-            zh.extractall(path=options.chdir, verbose=options.verbose,
-                          members=options.content if options.content else None)
+        elif options.extract:
+            with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
+                zh.extractall(path=options.chdir, verbose=options.verbose,
+                              members=options.content if options.content else None)
 
-    else:
-        print("No action specified")
+        else:
+            sys.stderr.write("No action specified\n")
+            sys.exit(1)
+
+    except RISCOSZipFileError as exc:
+        sys.stderr.write("Failed: {}\n".format(exc))
         sys.exit(1)
 
 
