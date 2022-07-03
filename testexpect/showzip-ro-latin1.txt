@@ -21,3 +21,4 @@ File #1
   RISC OS filetype:      0xfff
   RISC OS attributes:    0x03
   RISC OS object type:   1
+
