@@ -225,9 +225,13 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     directory_filetype = 0x1000
     directory_filetype_internal = 0xFFD
 
-    # Encoding to use for filenames returned to RISC OS
+    # Encoding to use for riscos_filename
     # For use in a wider environment, consider using riscos-latin1 from the python-codecs-riscos module.
     filename_encoding_name = 'latin-1'
+
+    # Encoding used for filenames that come from the zip files we are extracting
+    # RISC OS zip archives will be most likely in Latin-1.
+    zipfilename_encoding_name = 'latin-1'
 
     # The characters acceptable to the NFS encoding
     nfs_encoding_hexdigits = '0123456789abcdef'
@@ -278,6 +282,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     internal_attr_text = (1<<0)
     internal_attr_ebcdic = (1<<1)  # according to zipinfo
 
+    # General file flags
+    generalflags_utf8 = (1<<11)
+
     # RISC OS attributes
     _riscos_attr_read = (1<<0)
     _riscos_attr_write = (1<<1)
@@ -298,8 +305,10 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     _nfs_encoding = False
 
     _extra = None
+    _filename = ''
 
-    def __init__(self, filename="NoName", date_time=(1980, 1, 1, 0, 0, 0), zipinfo=None, nfs_encoding=True):
+    def __init__(self, filename="NoName", date_time=(1980, 1, 1, 0, 0, 0),
+                 zipinfo=None, nfs_encoding=True, zipinfo_fromzip=True):
         """
         Construct a new ZipInfoRISCOS object, either based on an existing zip_info or from scratch.
 
@@ -309,15 +318,70 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
         @param nfs_encoding:    Whether zip filenames should use the NFS filename encoding of:
                                     * `,xxx` => filetype
                                     * `,llllllll,eeeeeeee` => load and exec address
+        @param zipinfo_fromzip: Whether the ZipInfo passed came from the zip archive.
+                                If set to False, the ZipInfo was created manually and
+                                contains filenames in unicode format.
         """
         super(ZipInfoRISCOS, self).__init__(filename, date_time)
         if zipinfo:
+            # In Python 2:
+            #   The filename in a ZipInfo created from the file on disc is in the form
+            #   of a raw bytes string which came from the zip archive, unless the
+            #   UTF-8 flag is set. Names that came from disc (in native format) will
+            #   need to be decoded using the zipfilename_encoding_name.
+            #
+            #   If the ZipInfo was created manually, it may be in an undetermined
+            #   encoding as a str, or prepared unicode. If it's a string, it probably
+            #   came from the filesystem, so we'll assume that it's UTF-8.
+            #
+            # In Python 3:
+            #   The filename in a ZipInfo created from the file on disc has been decoded
+            #   as if it was 'cp437', unless the UTF-8 flag is set. Names that came from
+            #   disc in this format will need to be explicitly converted back to the
+            #   form that was on disc (we assume that the conversion to 'cp437' is
+            #   lossless), then decoded as the zipfilename_encoding_name.
+            #
+            #   If the ZipInfo was created manually, it should always be a unicode so
+            #   we should trust and not decode from 'cp437'. HOWEVER, it is not possible
+            #   to know that the ZipInfo was created manually from the structure, so
+            #   the variable zipinfo_fromzip should be False in such cases. Most uses
+            #   will be to decode from a zip, so this defaults to True.
+            #
+            if sys.version_info.major == 2:
+                if zipinfo.flag_bits & self.generalflags_utf8:
+                    # The filename is already in unicode, so nothing to do.
+                    self.filename = zipinfo.filename
+                else:
+                    if isinstance(zipinfo.filename, unicode):
+                        # They supplied it already in unicode format. Nothing to do.
+                        self.filename = zipinfo.filename
+                    elif zipinfo_fromzip:
+                        # The filename is raw from the file, so we need to decode it
+                        self.filename = zipinfo.filename.decode(self.zipfilename_encoding_name, 'replace')
+                    else:
+                        # They created it manually, so assume it's UTF-8
+                        self.filename = zipinfo.filename.decode('utf-8', 'replace')
+            else:
+                if zipinfo.flag_bits & self.generalflags_utf8:
+                    # The filename is already in unicode, so nothing to do.
+                    self.filename = zipinfo.filename
+                else:
+                    if zipinfo_fromzip:
+                        # The filename has been decoded as cp437 so we need to restore
+                        # and redecode it.
+                        filename = zipinfo.filename.encode('cp437')
+                        self.filename = filename.decode(self.zipfilename_encoding_name, 'replace')
+                    else:
+                        # This was a manually constructed ZipInfo so the filename is
+                        # already in unicode correctly.
+                        self.filename = zipinfo.filename
+
             # They wanted to pre-populate from an existing ZipInfo object.
             # Use the __slots__ element because this gives all the fields it supports.
             # If the implmentation changes, more consideration to reading the source
             # object will be required.
             for field in zipinfo.__class__.__slots__:
-                if field != 'extra':
+                if field != 'extra' and field != 'filename':
                     setattr(self, field, getattr(zipinfo, field, None))
             # Always populate the extra field last, as this modifies the existing fields
             # based on what the RISC OS extra field contains.
@@ -354,9 +418,23 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                                                                                           ro_attr,
                                                                                           ro_objtype,
                                                                                           ro_date_time)
-        return '<{}(filename={}; RO: {})>'.format(self.__class__.__name__,
-                                                  self.filename,
-                                                  ro_detail)
+        return '<{}(filename={!r}; RO: {})>'.format(self.__class__.__name__,
+                                                    self.filename,
+                                                    ro_detail)
+    @property
+    def filename(self):
+        return self._filename
+
+    @filename.setter
+    def filename(self, value):
+        """
+        The filename will always be in unicode format.
+        """
+        if unicode is not str:
+            if isinstance(value, str):
+                value = value.decode(self.filename_encoding_name, 'replace')
+        self._filename = value
+        return value
 
     @property
     def extra(self):
@@ -616,10 +694,10 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
                 # Filetyped, so actually we just use this filetype
                 filetype = (loadaddr >> 8) & 0xFFF
             else:
-                return '{},{:08x},{:08x}'.format(name, loadaddr, execaddr)
+                return u'{},{:08x},{:08x}'.format(name, loadaddr, execaddr)
 
         if filetype is not None:
-            return '{},{:03x}'.format(name, filetype)
+            return u'{},{:03x}'.format(name, filetype)
 
         return name
 

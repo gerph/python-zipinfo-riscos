@@ -15,3 +15,6 @@ Args: testdata/testdir-unix.zip unix
 
 Test: Zip with RISC OS fields
 Args: testdata/testdir-ro.zip ro
+
+Test: Zip with RISC OS encoding
+Args: testdata/testtbs.zip ro-latin1

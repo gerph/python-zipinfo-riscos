@@ -1,0 +1,23 @@
+File #0
+  Unix filename:         'tbs²/'
+  Unix date/time:        (2022, 7, 3, 12, 41, 13)
+  MS DOS flags:          0x11
+  Unix mode:             0o00000
+  RISC OS filename:      'tbs\xb2'
+  RISC OS date/time:     (2022, 7, 3, 12, 41, 13, 310)
+  RISC OS load/exec:     0xfffffd5a/0x02350b23
+  RISC OS filetype:      0x1000
+  RISC OS attributes:    0x00
+  RISC OS object type:   2
+
+File #1
+  Unix filename:         'tbs²/test£'
+  Unix date/time:        (2022, 7, 3, 12, 39, 49)
+  MS DOS flags:          0x00
+  Unix mode:             0o00000
+  RISC OS filename:      'tbs\xb2.test\xa3'
+  RISC OS date/time:     (2022, 7, 3, 12, 39, 49, 0)
+  RISC OS load/exec:     0xffffff5a/0x0234ea34
+  RISC OS filetype:      0xfff
+  RISC OS attributes:    0x03
+  RISC OS object type:   1

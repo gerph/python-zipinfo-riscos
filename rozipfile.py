@@ -98,15 +98,15 @@ class RISCOSZipFile(object):
 
     def verbose_object(self, zi):
         if zi.riscos_objtype == 2:
-            self.verbose('Directory {!r}'.format(zi.filename))
+            self.verbose("Directory {!r}".format(zi.riscos_filename))
         else:
             if zi.riscos_filetype != -1:
                 filetype = 'type &{:03X}'.format(zi.riscos_filetype)
             else:
                 filetype = 'load/exec &{:08X}/&{:08X}'.format(zi.riscos_loadaddr, zi.riscos_execaddr)
-            self.verbose('File {!r}, size {} bytes, {}'.format(zi.riscos_filename,
-                                                                     zi.file_size,
-                                                                     filetype))
+            self.verbose("File {!r}, size {} bytes, {}".format(zi.riscos_filename,
+                                                               zi.file_size,
+                                                               filetype))
 
     def add_file(self, filename, verbose=False):
         zipname = os.path.relpath(filename, self.base_dir)
@@ -143,7 +143,7 @@ class RISCOSZipFile(object):
             self.add_dir(filename, verbose=verbose)
 
         else:
-            raise RuntimeError("Cannot add '{}' as it is not a file or directory".format(filename))
+            raise RuntimeError("Cannot add '{}' as it is not a file or directory".format(filename.encode('utf-8')))
 
     def __enter__(self):
         return self
@@ -277,7 +277,7 @@ class RISCOSZipFile(object):
                     name = name.decode('ascii')
                 except UnicodeDecodeError:
                     name = repr(name)
-                print("{:{}} {:9} {:<10} {:>20} {}".format(name,
+                print("{:{}} {:9} {:<10} {:>20} {}".format(name.encode('utf-8'),
                                                            longest_name,
                                                            self._describe_attributes(zi.riscos_attr, zi.riscos_objtype),
                                                            self._describe_filetype(zi.riscos_filetype, zi.riscos_objtype),
@@ -290,7 +290,8 @@ class RISCOSZipFile(object):
         """
         for index, zi in enumerate(self.infolist()):
             print("File #{}".format(index))
-            print("  Unix filename:         {!r}".format(zi.filename))
+            # Filename is always in unicode format, so always print it as UTF-8.
+            print("  Unix filename:         {!r}".format(zi.filename.encode('utf-8')))
             print("  Unix date/time:        {!r}".format(zi.date_time))
             print("  MS DOS flags:          &{:02x}".format(zi.external_attr & 0xFF))
             print("  Unix mode:             8_{:05o}".format(zi.external_attr>>16))
