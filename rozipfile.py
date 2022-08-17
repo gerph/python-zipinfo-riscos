@@ -385,7 +385,7 @@ class RISCOSZipFile(object):
         return self.zh.read(zi)
 
     def extract(self, member, path=None, verbose=False):
-        if isinstance(member, str):
+        if isinstance(member, (str, bytes)):
             zi = self.getinfo(member)
         else:
             if isinstance(member, rozipinfo.ZipInfoRISCOS):

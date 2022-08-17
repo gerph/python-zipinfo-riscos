@@ -387,6 +387,12 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             # based on what the RISC OS extra field contains.
             self.extra = zipinfo.extra
 
+            # Some archive tools have written the filename ending in a '/' but not marked the
+            # file as being a directory. This causes problems when we try to extract because we
+            # create a 0 length file, which then cannot be a directory.
+            if self.filename.endswith('/'):
+                self.external_attr |= self.external_attr_msdos_directory
+
         self._nfs_encoding = nfs_encoding
         self.create_system = 13  # RISC OS
 
