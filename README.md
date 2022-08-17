@@ -110,6 +110,11 @@ Extracting an archive:
 
     python -m rozipfile [--chdir <dir>] --extract <archive> <files>*
 
+Producing a list of *SetType commands to restore filetypes from a badly extracted file:
+
+    python -m rozipfile [--chdir <dir>] --settypes <archive>
+
+
 ### Default filetype
 
 The default filetype for files that don't have any RISC OS extension information present (either as NFS-encoding or RISC OS extensions) is &FFD (Data). However, the switch `--default-filetype` can be used to default to a different type. Most commonly you may wish to set the default filetype to Text with `--default-filetype text`.

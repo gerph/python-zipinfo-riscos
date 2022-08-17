@@ -443,6 +443,8 @@ def main():
                         help="Extract files from a RISC OS zip archive, to files with NFS encoding")
     parser.add_argument('-l', '--list', action='store_true',
                         help="List the contents of a RISC OS zip archive")
+    parser.add_argument('-t', '--settypes', action='store_true',
+                        help="Output *SetType commands to restore filetypes on an incorrectly extracted file")
     parser.add_argument('zipfile',
                         help="Zip archive to create")
     parser.add_argument('content', nargs='*',
@@ -466,6 +468,13 @@ def main():
                     zh.printdir_verbose()
                 else:
                     zh.printdir()
+
+        elif options.settypes:
+            with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
+                for zi in zh.infolist():
+                    if zi.riscos_objtype == 1:
+                        name = zi.riscos_filename.decode(zi.filename_encoding_name)
+                        print("*SetType {} &{:3X}".format(name, zi.riscos_filetype))
 
         elif options.extract:
             with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
