@@ -485,8 +485,13 @@ def main():
             sys.stderr.write("No action specified\n")
             sys.exit(1)
 
+    except IOError as exc:
+        # If the file doesn't exist, is inaccessible, or fails to read, we report as an IO error.
+        sys.stderr.write("Failed: IO error: {}\n".format(exc))
+        sys.exit(1)
+
     except RISCOSZipFileError as exc:
-        sys.stderr.write("Failed: {}\n".format(exc))
+        sys.stderr.write("Failed: Zip error {}\n".format(exc))
         sys.exit(1)
 
 
