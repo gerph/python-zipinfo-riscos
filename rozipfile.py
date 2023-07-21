@@ -476,7 +476,7 @@ def main():
     zip_filename = os.path.abspath(options.zipfile)
 
     compression = zipfile.ZIP_DEFLATED if options.compression else zipfile.ZIP_STORED
-    print("Compression %r/%r" % (compression, options.compression))
+    #print("Compression %r/%r" % (compression, options.compression))
 
     try:
         if options.create:
