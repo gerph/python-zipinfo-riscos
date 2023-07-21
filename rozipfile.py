@@ -28,6 +28,10 @@ import zipfile
 import rozipinfo
 
 
+# Whether the Python zipfile module supports compression levels.
+has_compression_level = sys.version_info > (3, 7)
+
+
 class RISCOSZipFileError(Exception):
     pass
 
@@ -86,10 +90,12 @@ class RISCOSZipFile(object):
 
     escapable_re = re.compile(br'[\x00-\x1f\x7f-\xff]')
 
-    def __init__(self, zip_filename, mode='r', base_dir='.', default_filetype=None):
+    def __init__(self, zip_filename, mode='r', compression=zipfile.ZIP_STORED,
+                 base_dir='.', default_filetype=None):
         self.zip_filename = zip_filename
+        self.compression = compression
         self.mode = mode
-        self.zh = zipfile.ZipFile(zip_filename, mode)
+        self.zh = zipfile.ZipFile(zip_filename, mode, compression)
         if default_filetype:
             if default_filetype in self.inv_named_types:
                 # It's a named type
@@ -141,17 +147,22 @@ class RISCOSZipFile(object):
                                                                zi.file_size,
                                                                filetype))
 
-    def add_file(self, filename, verbose=False):
+    def add_file(self, filename, verbose=False, compresslevel=None):
         zipname = os.path.relpath(filename, self.base_dir)
         zi = self.cls_zipinfo.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
+        zi.compress_type = self.compression
         zi.nfs_encoding = False
         if verbose:
             self.verbose_object(zi)
         with open(filename, 'rb') as fh:
             data = fh.read()
-        self.zh.writestr(zi, data)
+        #print("Compression: %r"% (compresslevel,))
+        if compresslevel is None or not has_compression_level:
+            self.zh.writestr(zi, data)
+        else:
+            self.zh.writestr(zi, data, compresslevel=compresslevel)
 
-    def add_dir(self, filename, verbose=False):
+    def add_dir(self, filename, verbose=False, compresslevel=None):
         zipname = os.path.relpath(filename, self.base_dir)
         zi = self.cls_zipinfo.from_file(filename=filename, arcname=zipname, nfs_encoding=True)
         zi.nfs_encoding = False
@@ -163,16 +174,16 @@ class RISCOSZipFile(object):
         # Having written this directory, we now need to write each of the objects within it.
         for name in os.listdir(filename):
             new_filename = os.path.join(filename, name)
-            self.add_to_zipfile(new_filename, verbose=verbose)
+            self.add_to_zipfile(new_filename, verbose=verbose, compresslevel=compresslevel)
 
-    def add_to_zipfile(self, filename, verbose=False):
+    def add_to_zipfile(self, filename, verbose=False, compresslevel=None):
         if os.path.isfile(filename):
             # This is a simple file
-            self.add_file(filename, verbose=verbose)
+            self.add_file(filename, verbose=verbose, compresslevel=compresslevel)
 
         elif os.path.isdir(filename):
             # This is a directory, so we want to add everything within it
-            self.add_dir(filename, verbose=verbose)
+            self.add_dir(filename, verbose=verbose, compresslevel=compresslevel)
 
         else:
             raise RuntimeError("Cannot add '{}' as it is not a file or directory".format(filename.encode('utf-8')))
@@ -431,6 +442,16 @@ class RISCOSZipFile(object):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-0', '--store',      dest='compression', action='store_const', const=0, default=6,
+                        help="Compression level: Store")
+    if has_compression_level:
+        parser.add_argument('-1', '--faster', dest='compression', action='store_const', const=1,
+                            help="Compression level: Deflate level 1 (faster)")
+    parser.add_argument('-6', '--deflate',    dest='compression', action='store_const', const=6,
+                        help="Compression level: Deflate level 6 (default)")
+    if has_compression_level:
+        parser.add_argument('-9', '--better', dest='compression', action='store_const', const=9,
+                            help="Compression level: Deflate level 9 (best)")
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="Output more information during processing")
     parser.add_argument('-T', '--default-filetype', default=None,
@@ -454,13 +475,19 @@ def main():
 
     zip_filename = os.path.abspath(options.zipfile)
 
+    compression = zipfile.ZIP_DEFLATED if options.compression else zipfile.ZIP_STORED
+    print("Compression %r/%r" % (compression, options.compression))
+
     try:
         if options.create:
-            with RISCOSZipFile(zip_filename, 'w', base_dir=options.chdir, default_filetype=options.default_filetype) as rzh:
+            with RISCOSZipFile(zip_filename, 'w', compression=compression,
+                               base_dir=options.chdir, default_filetype=options.default_filetype) as rzh:
 
                 options.chdir = os.path.abspath(options.chdir)
                 for filename in options.content:
-                    rzh.add_to_zipfile(filename, verbose=options.verbose)
+                    rzh.add_to_zipfile(filename,
+                                       verbose=options.verbose,
+                                       compresslevel=options.compression)
 
         elif options.list:
             with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
@@ -470,14 +497,16 @@ def main():
                     zh.printdir()
 
         elif options.settypes:
-            with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
+            with RISCOSZipFile(zip_filename, 'r',
+                               default_filetype=options.default_filetype) as zh:
                 for zi in zh.infolist():
                     if zi.riscos_objtype == 1:
                         name = zi.riscos_filename.decode(zi.filename_encoding_name)
                         print("*SetType {} &{:3X}".format(name, zi.riscos_filetype))
 
         elif options.extract:
-            with RISCOSZipFile(zip_filename, 'r', default_filetype=options.default_filetype) as zh:
+            with RISCOSZipFile(zip_filename, 'r',
+                               default_filetype=options.default_filetype) as zh:
                 zh.extractall(path=options.chdir, verbose=options.verbose,
                               members=options.content if options.content else None)
 
