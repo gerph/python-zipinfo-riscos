@@ -221,6 +221,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
     default_filetype = 0xFFD
     default_filetype_text = 0xFFF
 
+    # Whether we force files with no RISC OS information to have a default filetype
+    force_riscos_filetype = False
+
     # Filetype to use for the directory in the API, and in the loadaddr
     directory_filetype = 0x1000
     directory_filetype_internal = 0xFFD
@@ -392,6 +395,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             # create a 0 length file, which then cannot be a directory.
             if self.filename.endswith('/'):
                 self.external_attr |= self.external_attr_msdos_directory
+
+            if self.force_riscos_filetype and zinfo._riscos_filetype is None:
+                self.riscos_filetype = self.riscos_filetype
 
         self._nfs_encoding = nfs_encoding
         self.create_system = 13  # RISC OS
@@ -1307,6 +1313,9 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             zinfo.external_attr |= 0x10  # MS-DOS directory flag
         else:
             zinfo.file_size = st.st_size
+
+        if cls.force_riscos_filetype and zinfo._riscos_filetype is None:
+            zinfo.riscos_filetype = zinfo.riscos_filetype
 
         # Finally set the encoding to the format requested, so that we get the encoding
         # format they want to use.

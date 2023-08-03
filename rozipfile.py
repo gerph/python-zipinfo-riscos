@@ -112,7 +112,10 @@ class RISCOSZipFile(object):
 
         if self.default_filetype:
             class ZipInfoRISCOSCustom(self.cls_zipinfo):
-                pass
+
+                # Force the use of the default filetype
+                force_riscos_filetype = True
+
             ZipInfoRISCOSCustom.default_filetype = default_filetype
             self.cls_zipinfo = ZipInfoRISCOSCustom
 
