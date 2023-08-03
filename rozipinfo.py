@@ -396,7 +396,7 @@ class ZipInfoRISCOS(zipfile.ZipInfo):
             if self.filename.endswith('/'):
                 self.external_attr |= self.external_attr_msdos_directory
 
-            if self.force_riscos_filetype and zinfo._riscos_filetype is None:
+            if self.force_riscos_filetype and self._riscos_filetype is None:
                 self.riscos_filetype = self.riscos_filetype
 
         self._nfs_encoding = nfs_encoding
