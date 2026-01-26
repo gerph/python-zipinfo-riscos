@@ -1,0 +1,106 @@
+---
+
+name: Python build
+
+# Controls when the action will run. Triggers the workflow on:
+#   * push on any branch.
+#   * tag creation for tags beginning with a 'v'
+#   * pull requests
+on:
+  push:
+    branches: ["*"]
+    tags: ["v*"]
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: ["*"]
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Obtain prerequisites
+        run: |
+          sudo apt-get install -y virtualenv
+
+      - name: Run tests
+        run: |
+          make tests PYTHON=python3
+
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run tests
+        run: |
+          make inttests PYTHON=python3
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Obtain prerequisites
+        run: |
+          sudo apt-get install -y virtualenv
+
+      - name: Run tests
+        run: |
+          make coverage
+
+  build-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Package up
+        run: |
+          ./package.sh
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Package
+          path: dist
+
+  # The release only triggers when the thing that was pushed was a tag starting with 'v'
+  release:
+    needs:
+      - build-package
+      - coverage
+      - integration-test
+      - unit-test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download built package
+        uses: actions/download-artifact@v4
+        with:
+          name: Package
+
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          prerelease: false
+          draft: true
+          artifacts: rozipinfo*.tar.gz

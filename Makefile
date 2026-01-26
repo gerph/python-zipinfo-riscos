@@ -22,14 +22,14 @@ ${VENV}/marker:
 	touch "${VENV}/marker"
 
 tests: setup artifacts
-	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html --xunit-file artifacts/test-${PYTHON}.xml
+	${IN_VENV} ${PYTHON} rozipinfo_test.py -v
 
 inttests: artifacts
 	./test.pl --show-command ${OUTPUT_FORMAT} --junitxml artifacts/inttest-${PYTHON}.xml "${PYTHON}" .
 
 coverage: setup
 	-rm -rf .coverage
-	${IN_VENV} ${PYTHON} rozipinfo_test.py -v --with-coverage --cover-html
+	${IN_VENV} TEST_WITH_COVERAGE=1 ${PYTHON} rozipinfo_test.py -v
 
 package: tests inttests
 	./package.sh

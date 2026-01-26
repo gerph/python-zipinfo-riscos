@@ -3,12 +3,14 @@
 # Set up the packaging to produce a good release.
 #
 
+set -e
+
 thisdir=$(cd "$(dirname "$0")" && pwd -P)
 
 eval "$(./ci-vars --shell --repo "${thisdir}")"
 version="${CI_BRANCH_VERSION//-dirty}"
 
-if [[ "$version" =~ ^(.*)\.([a-z]*)\.([0-9]*)$ ]] ; then
+if [[ "$version" =~ ^(.*)\.([a-zA-Z0-9_-]*)\.([0-9]*)$ ]] ; then
     version="${BASH_REMATCH[1]}+${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
 fi
 
