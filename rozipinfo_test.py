@@ -15,8 +15,6 @@ import sys
 import unittest
 import zipfile
 
-import nose
-
 
 rozipinfo = None
 
@@ -64,10 +62,7 @@ EXTRA_UT_TESTDATE = bytes(bytearray.fromhex('55 54 05 00 '              # Header
 # Ensure that the Coverage module is configured to instrument the package we
 # care about (and to play nice with other people)
 if os.environ.get('NOSE_WITH_COVERAGE') or '--with-coverage' in sys.argv:
-    package = os.environ.get('NOSE_COVER_PACKAGE', '').split(',')
-    package = set(pkg for pkg in package if pkg != '')
-    package.add('rozipinfo')
-    os.environ['NOSE_COVER_PACKAGE'] = ",".join(sorted(package))
+    import coverage
 
 
 def build_loadexec(loadaddr, execaddr, filetype=None):
@@ -951,8 +946,14 @@ class Test81ExtraFieldWriting(BaseTestCase):
 
 
 if __name__ == '__main__':
-    __name__ = os.path.basename(sys.argv[0][:-3])  # pylint: disable=redefined-builtin
-    env = os.environ
-    env['NOSE_WITH_XUNIT'] = '1'
-    env['NOSE_VERBOSE'] = '1'
-    exit(nose.runmodule(env=env))
+    if os.environ.get('TEST_WITH_COVERAGE'):
+        import coverage
+        cov = coverage.Coverage()
+        cov.start()
+        try:
+            unittest.main()
+        finally:
+            cov.stop()
+            cov.report(include="rozipinfo.py")
+    else:
+        unittest.main()
