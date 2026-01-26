@@ -7,7 +7,7 @@ set -e
 
 thisdir=$(cd "$(dirname "$0")" && pwd -P)
 
-eval "$(./ci-vars --shell --repo "${thisdir}")"
+eval "$(./ci-vars --shell --repo "${thisdir}" | sed -e 's!/!-!g')"
 version="${CI_BRANCH_VERSION//-dirty}"
 
 if [[ "$version" =~ ^(.*)\.([a-zA-Z0-9_-]*)\.([0-9]*)$ ]] ; then
