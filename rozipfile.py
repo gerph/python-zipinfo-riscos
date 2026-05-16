@@ -196,7 +196,7 @@ class RISCOSZipFile(object):
             self.add_dir(filename, verbose=verbose, compresslevel=compresslevel)
 
         else:
-            raise RuntimeError("Cannot add '{}' as it is not a file or directory".format(filename.encode('utf-8')))
+            raise RISCOSZipFileError("Cannot add {} as it is not a file or directory".format(self._present_native_name(filename, quoted=True)))
 
     def __enter__(self):
         return self
@@ -530,7 +530,7 @@ def main():
         sys.exit(1)
 
     except RISCOSZipFileError as exc:
-        sys.stderr.write("Failed: Zip error {}\n".format(exc))
+        sys.stderr.write("Failed: Zip error: {}\n".format(exc))
         sys.exit(1)
 
 

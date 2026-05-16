@@ -1,0 +1,1 @@
+Failed: Zip error: Cannot add 'testdata/srcdata/nonexistant' as it is not a file or directory

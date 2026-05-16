@@ -1,0 +1,2 @@
+# Trim absolute filenames
+s!'/[^']*testdata!'testdata!g

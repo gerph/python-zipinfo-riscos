@@ -60,3 +60,14 @@ Args: testdata/srcdata fromdir
 
 Test: From file
 Args: testdata/srcdata/nofiletype fromfile
+
+Test: Non-existant
+Args: testdata/srcdata/nonexistant nonexistant
+RC: 1
+
+Test: Cannot create
+Args: testdata/srcdata/nofiletype cannotcreate
+Command: $TOOL -m rozipfile --verbose --create testdata/nonexistant/create-$ARG2.zip $ARG1
+-Creates:
+Replace: testexpect/trim_filename-replacements
+RC: 1
