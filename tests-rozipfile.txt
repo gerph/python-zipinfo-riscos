@@ -47,3 +47,16 @@ Args: testdata/testdir-nonro.zip nonro
 Test: Zip without RISC OS or NFS names (default type)
 Command: $TOOL -m rozipfile --verbose --default-filetype fff --list $ARG1
 Args: testdata/testdir-nonro.zip nonro-text
+
+
+Group: Create archives
+
+Command: $TOOL -m rozipfile --verbose --create testdata/create-$ARG2.zip $ARG1
+Creates: testdata/create-$ARG2.zip
+Expect: testexpect/rozipfile-create-$ARG2.txt
+
+Test: From directory
+Args: testdata/srcdata fromdir
+
+Test: From file
+Args: testdata/srcdata/nofiletype fromfile

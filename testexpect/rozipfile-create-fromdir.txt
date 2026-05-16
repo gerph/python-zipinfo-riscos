@@ -1,0 +1,4 @@
+Zip compress: Directory 'testdata.srcdata'
+Zip compress: File 'testdata.srcdata.nofiletype', size 42 bytes, type &FFD (Data)
+Zip compress: File 'testdata.srcdata.data', size 18 bytes, type &FFF (Text)
+Zip compress: File 'testdata.srcdata.text', size 18 bytes, type &FFF (Text)

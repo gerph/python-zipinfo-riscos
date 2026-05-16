@@ -143,7 +143,7 @@ class RISCOSZipFile(object):
 
     def verbose_object(self, zi):
         if zi.riscos_objtype == 2:
-            self.verbose("Directory {!r}".format(zi.riscos_filename))
+            self.verbose("Directory {}".format(self._present_riscos_name(zi.riscos_filename, quoted=True)))
         else:
             type_name = None
             if zi.riscos_filetype != -1:
@@ -153,9 +153,9 @@ class RISCOSZipFile(object):
                     filetype += ' ({})'.format(type_name)
             else:
                 filetype = 'load/exec &{:08X}/&{:08X}'.format(zi.riscos_loadaddr, zi.riscos_execaddr)
-            self.verbose("File {!r}, size {} bytes, {}".format(zi.riscos_filename,
-                                                               zi.file_size,
-                                                               filetype))
+            self.verbose("File {}, size {} bytes, {}".format(self._present_riscos_name(zi.riscos_filename, quoted=True),
+                                                             zi.file_size,
+                                                             filetype))
 
     def add_file(self, filename, verbose=False, compresslevel=None):
         zipname = os.path.relpath(filename, self.base_dir)

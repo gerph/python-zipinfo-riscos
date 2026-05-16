@@ -1,0 +1,1 @@
+Zip compress: File 'testdata.srcdata.nofiletype', size 42 bytes, type &FFD (Data)
