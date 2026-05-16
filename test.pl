@@ -52,6 +52,8 @@
 #
 # Include: <filename>
 #       - Include another file as if it were inline
+# Suite: <name>
+#       - Suite name to include for JUnitXML output; will be inferred from test name.
 # Group: <name>
 #       - Begin a group definition
 # Test: <name>
@@ -213,7 +215,7 @@
 #   - Conditions:
 #       - [<number>]-[<number>] or <number> for line range to apply rule to.
 #         Line numbers start at 1.
-#       - /<regular expression>/for expression to match.
+#       - /<regular expression>/ for expression to match.
 #       - Both the above conditions may be suffixed by `!` to negate matches.
 #   - Actions:
 #       - `p` immediately include the line in the output, and move on to the next line
@@ -253,6 +255,7 @@ my $help = 0;
 my $debug_filename = 0;
 my $debug_replace = 0;
 my $debug_aof = 0;
+my $debug_junitxml = 0;
 
 # Matching for test selection
 my $matchgroup_re = undef;
@@ -270,6 +273,9 @@ my $outputsavedir = undef;
 # How far ahead we look to synchronise
 my $diff_maxsearchdist = 100;
 
+# How the JUnitXML is constructed
+my $groups_in_junitxml_classes = 1;
+
 # Name of the test script to execute
 my $testscript = $riscos ? "tests/txt" : "tests.txt";
 
@@ -279,6 +285,8 @@ my $fail_colour = "\e[31m";
 my $crash_colour = "\e[35m";
 my $ok_colour = "\e[32m";
 my $control_colour = "\e[36m";
+my $diffadd_colour = "\e[33m";
+my $diffdel_colour = "\e[35m";
 
 if ($riscos)
 {
@@ -291,6 +299,8 @@ if ($riscos)
         $crash_colour = "\x11\x05"; # Hopefully purple
         $ok_colour = "\x11\x04"; # Hopefully green
         $control_colour = "\x11\x06"; # Hopefully cyan
+        $diffadd_colour = "\x11\x03"; # Hopefully yellow
+        $diffdel_colour = "\x11\x05"; # Hopefully purple
     }
     else
     {
@@ -299,6 +309,8 @@ if ($riscos)
         $crash_colour = "";
         $ok_colour = "";
         $control_colour = "";
+        $diffadd_colour = "";
+        $diffdel_colour = "";
     }
 }
 
@@ -366,6 +378,8 @@ while ($arg = shift)
                 { $debug_replace = 1; }
                 if ($debugname eq 'aof' || $debugname eq 'all')
                 { $debug_aof = 1; }
+                if ($debugname eq 'junitxml' || $debugname eq 'all')
+                { $debug_junitxml = 1; }
             }
         }
         else
@@ -498,11 +512,25 @@ sub tempfilename
 sub parse_test_script
 {
     my ($testscript) = (@_);
+    my $suite = undef;
     my $group = undef;
     my $test = undef;
     my $acc = undef;
     my @lines;
     my @groups;
+    if ($testscript =~ m!(?:^|[\./])([^\./]+)[\./]txt$!)
+    {
+        # Infer a suite name for the group.
+        $suite = $1;
+        print "Suite name found: '$suite'\n" if ($debug_junitxml);
+        if ($suite !~ /[A-Z]/)
+        {
+            # No capitals, so capitalise it ourselves, and tidy up naming.
+            $suite =~ s/-/ /g;
+            $suite = join ' ', map { ucfirst } split / /, $suite;
+            $suite =~ s/^Tests? //;
+        }
+    }
     open(TESTFH, "< $testscript") || die "Cannot open test script '$testscript': $!";
     while (<TESTFH>)
     {
@@ -527,10 +555,17 @@ sub parse_test_script
         {
             # Not a base command specification; so try a checker value.
             ($checker, $cmd, $arg) = ($line =~ /^([A-Za-z]+):([A-Za-z]+): *(.*?) *$/);
-            $checker = lc $checker;
-            if (!defined $checkers{$checker})
+            if (!$checker)
             {
-                die "Unrecognised checker '$checker' in line '$line' whilst reading '$testscript'";
+                ($minus, $checker, $cmd, $arg) = ($line =~ /^(-?)([A-Za-z]+):([A-Za-z]+):$/);
+            }
+            if ($checker)
+            {
+                $checker = lc $checker;
+                if (!defined $checkers{$checker})
+                {
+                    die "Unrecognised checker '$checker' in line '$line' whilst reading '$testscript'";
+                }
             }
         }
 
@@ -545,18 +580,31 @@ sub parse_test_script
             {
                 $acc->{$checker} = {};
             }
-            $acc->{$checker}->{lc $cmd} = $arg;
+            if ($minus)
+            {
+                delete $acc->{$checker}->{lc $cmd};
+            }
+            else
+            {
+                $acc->{$checker}->{lc $cmd} = $arg;
+            }
         }
         elsif ($cmd eq 'Include')
         {
             # Process an include file
             push @groups, parse_test_script($arg);
         }
+        elsif ($cmd eq 'Suite')
+        {
+            $suite = $arg;
+        }
         elsif ($cmd eq 'Group')
         {
             $group = {
+                    'suite' => $suite || undef,
                     'group-index' => scalar(@groups),
                     'group' => $arg,
+                    'timestamp' => undef,
                     'tests' => [],
                     'pass' => 0,
                     'fail' => 0,
@@ -853,7 +901,7 @@ sub escape_controls
 sub diff
 {
     my ($result, $expected, $indent) = @_;
- 
+
     my @resultlist = split /\n/, $result;
     my @expectlist = split /\n/, $expected;
     @resultlist = () if ($result eq '');
@@ -882,13 +930,19 @@ sub diff
         my $expectline = $elinenum > $expectlen ? undef : $expectlist[$elinenum-1];
 
         my $diff = ':';
+        my $diff_colour = '';
+        my $done_colour = '';
         if (!defined $expectline)
         {
             $diff = '+';
+            $diff_colour = $diffadd_colour;
+            $done_colour = $reset_colour;
         }
         elsif (!defined $resultline)
         {
             $diff = '-';
+            $diff_colour = $diffdel_colour;
+            $done_colour = $reset_colour;
         }
         elsif ($resultline ne $expectline)
         {
@@ -953,7 +1007,7 @@ sub diff
                 {
                     for $n (0..$egap - 1)
                     {
-                        push @message, sprintf "%*s - %s", $longestnum, '', escape_controls($expectlist[$elinenum-1 + $n]);
+                        push @message, sprintf "%*s %s- %s%s", $longestnum, '', $diffdel_colour, escape_controls($expectlist[$elinenum-1 + $n]), $reset_colour;
                     }
                     $elinenum+=$egap;
                 }
@@ -961,7 +1015,7 @@ sub diff
                 {
                     for $n (0..$rgap - 1)
                     {
-                        push @message, sprintf "%*s + %s", $longestnum, $rlinenum + $n, escape_controls($resultlist[$rlinenum-1 + $n]);
+                        push @message, sprintf "%*s %s+ %s%s", $longestnum, $rlinenum + $n, $diffadd_colour, escape_controls($resultlist[$rlinenum-1 + $n]), $reset_colour;
                     }
                     $rlinenum+=$rgap;
                 }
@@ -971,13 +1025,15 @@ sub diff
                 }
             }
             $diff = '+';
+            $diff_colour = $diffadd_colour;
+            $done_colour = $reset_colour;
         }
-        push @message, sprintf "%*d %s %s", $longestnum, $rlinenum, $diff, escape_controls($diff eq '-' ? $expectline : $resultline);
+        push @message, sprintf "%*d %s%s %s%s", $longestnum, $rlinenum, $diff_colour, $diff, escape_controls($diff eq '-' ? $expectline : $resultline), $done_colour;
         if (defined $expectline &&
             defined $resultline &&
             $resultline ne $expectline)
         {
-            push @message, sprintf "%*s - %s", $longestnum, '', escape_controls($expectline);
+            push @message, sprintf "%*s %s- %s%s", $longestnum, '', $diffdel_colour, escape_controls($expectline), $reset_colour;
         }
         $rlinenum ++;
         $elinenum ++;
@@ -1425,6 +1481,7 @@ sub run_test
     my $output;
     my $duration = undef;
     my $status;
+    my $check_reporter = undef;
     {
         my $start_time = time();
 
@@ -1471,7 +1528,7 @@ sub run_test
     {
         $fail = "Expected RC $wantrc, got $rc";
     }
-    if (!$fail && defined $expect)
+    if (defined $expect)
     {
         my $expected = read_file($expect, 'expect file');
         my $native_expect = native_filename($expect);
@@ -1484,7 +1541,7 @@ sub run_test
         $test->{'result_expected'} = $expected;
         if ($output ne $expected)
         {
-            $fail = "Expected output did not match";
+            $fail = "Expected output did not match" if (!$fail);
             open(FH, "> $native_expect-actual") || die "Could not write expected output to '$native_expect-actual': $!";
             print FH $output;
             close(FH);
@@ -1556,6 +1613,13 @@ sub run_test
                     }
                     if ($fail)
                     {
+                        if (ref($fail) eq 'ARRAY')
+                        {
+                            # If they returned a function to report on the failure,
+                            # remember it so that we can use it later.
+                            $check_reporter = $fail->[1];
+                            $fail = $fail->[0];
+                        }
                         $fail = "$checker: $fail";
                         last;
                     }
@@ -1625,6 +1689,10 @@ sub run_test
             if ($outputdiff && defined($test->{'result_expected'}))
             {
                 diff($output, $test->{'result_expected'}, '    ');
+            }
+            if (defined $check_reporter)
+            {
+                & $check_reporter ('    ');
             }
         }
     }
@@ -1699,61 +1767,165 @@ sub write_junitxml
     open(FH, "> $output") || die "Cannot write JunitXML '$output': $!";
 
     print FH "<?xml version=\"1.0\"?>\n";
-    # FIXME: Should skipped be mapped to 'disabled' at the top level?
-    print FH "<testsuites tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
+    my $hostname;
+    my %properties;
+    if ($riscos)
+    {
+        $hostname = $ENV{'Inet$Hostname'};
+        $properties{'os'} = 'riscos';
+    }
+    else
+    {
+        $hostname = `hostname -f`;
+        chomp($hostname);
+        $hostname = undef if ($hostname eq 'localhost');
+        $properties{'os'} = $^O;
+    }
+    # For GitLab: https://docs.gitlab.com/ee/ci/variables/predefined_variables.html
+    # For GitHub: https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+    if ($ENV{'GITHUB_SERVER_URL'}) # GitHub
+    {
+        $properties{'ci'} = $ENV{'GITHUB_SERVER_URL'} . '/' . $ENV{'GITHUB_REPOSITORY'} . '/actions/runs/' .
+                            $ENV{'GITHUB_RUN_ID'};
+    }
+    elsif ($ENV{'CI_JOB_URL'}) # GitLab
+    {
+        $properties{'ci'} = $ENV{'CI_JOB_URL'};
+    }
+    if ($ENV{'GITHUB_REF_NAME'}) # GitHub
+    {
+        $properties{'branch'} = $ENV{'GITHUB_REF_NAME'};
+    }
+    elsif ($ENV{'CI_COMMIT_BRANCH'}) # GitLab
+    {
+        $properties{'branch'} = $ENV{'CI_COMMIT_BRANCH'}
+    }
+    if ($ENV{'GITHUB_SHA'}) # GitHub
+    {
+        $properties{'sha'} = $ENV{'GITHUB_SHA'};
+    }
+    elsif ($ENV{'CI_COMMIT_SHA'}) # GitLab
+    {
+        $properties{'sha'} = $ENV{'CI_COMMIT_SHA'};
+    }
+    print FH "<testsuites tests=\"$ntests\" failures=\"$nfailures\" skipped=\"$skipped\" errors=\"$nerrors\">\n";
+
+    # To build the JUnitXML file we construct a list of suites that were run, and then
+    # write them out.
+    my @suiteorder;
+    my %suites;
     for $group (@groups)
     {
-        $nerrors = $group->{'crash'};
-        $nfailures = $group->{'fail'};
-        $ntests = $group->{'pass'} + $nerrors + $nfailures;
-        $nskipped = $group->{'skip'};
-        my $duration = 0;
-        for $test (@{ $group->{'tests'} })
+        my $suitename;
+        if ($groups_in_junitxml_classes)
         {
-            next if (!defined $test->{'result'});
-            if (defined $test->{'duration'})
+            $suitename = $group->{'suite'} || 'ToolTest';
+        }
+        else
+        {
+            $suitename = $group->{'suite'} ? "$group->{'suite'}: $group->{'group'}" : $group->{'group'};
+        }
+        if (!defined $suites{$suitename})
+        {
+            # This is a new suite, so we need to create it.
+            $suites{$suitename} = [];
+            push @suiteorder, $suitename;
+        }
+        push @{ $suites{$suitename} }, $group;
+    }
+
+    # Step through all the suites that we've created and add them to the JUnitXML file.
+    my $suite;
+    for $suite (@suiteorder)
+    {
+        my @suitegroups = @{ $suites{$suite} };
+        my $first = 1;
+
+        print "JUnitXML: Generate suite: '$suite': ", (scalar(@suitegroups)), " groups present\n" if ($debug_junitxml);
+
+        # Summarise all the groups in this suite
+        $nerrors = 0;
+        $nfailures = 0;
+        $ntests = 0;
+        $nskipped = 0;
+        my $duration = 0;
+        my $firstgroup = undef;
+        for $group (@suitegroups)
+        {
+            print "  Group: $group->{'group'}\n" if ($debug_junitxml);
+            $firstgroup = $group if (!$firstgroup);
+            $nerrors += $group->{'crash'};
+            $nfailures += $group->{'fail'};
+            $ntests += $group->{'pass'} + $nerrors + $nfailures;
+            $nskipped += $group->{'skip'};
+            for $test (@{ $group->{'tests'} })
             {
-                $duration += $test->{'duration'};
+                next if (!defined $test->{'result'});
+                if (defined $test->{'duration'})
+                {
+                    $duration += $test->{'duration'};
+                }
             }
         }
-        print FH "  <testsuite name=\"" . xml_escape($group->{'group'}) . "\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\"";
+
+        print FH "  <testsuite name=\"" . xml_escape($suite) . "\"";
+        print FH " tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\"";
+        if ($hostname)
+        {
+            print FH " hostname=\"$hostname\"";
+        }
         if ($duration)
         {
             print FH sprintf " time=\"%.2f\"", $duration;
         }
-        print FH ">\n";
-        for $test (@{ $group->{'tests'} })
+        if (defined $firstgroup->{'timestamp'})
         {
-            next if (!defined $test->{'result'});
-            print FH "    <testcase classname=\"ToolTest\" name=\"" . xml_escape($test->{'name'}) . "\"";
-            if (defined $test->{'duration'})
+            my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime($firstgroup->{'timestamp'});
+            print FH sprintf " timestamp=\"%04s-%02s-%02sT%02s:%02s:%02s\"", 1900 + $year, $mon + 1, $mday, $hour, $min, $sec;
+        }
+        print FH ">\n";
+        print FH "<properties>\n";
+        for $prop (sort keys %properties)
+        {
+            print FH "    <property name=\"$prop\" value=\"".xml_escape($properties{$prop})."\"/>\n";
+        }
+        print FH "</properties>\n";
+        for $group (@suitegroups)
+        {
+            for $test (@{ $group->{'tests'} })
             {
-                print FH sprintf " time=\"%.2f\"", $test->{'duration'};
-            }
-            if ($test->{'result'} eq 'pass')
-            {
-                print FH " />\n";
-            }
-            else
-            {
-                my $message = "$test->{'result'}: $test->{'result_message'}";
-                print FH ">\n";
-                my $tag = $result_tag_name{ $test->{'result'} };
-                print FH "      <$tag";
-                if ($has_message{ $test->{'result'} })
+                next if (!defined $test->{'result'});
+                my $classname = $groups_in_junitxml_classes ? $group->{'group'} : 'ToolTest';
+                print FH "    <testcase classname=\"$classname\" name=\"" . xml_escape($test->{'name'}) . "\"";
+                if (defined $test->{'duration'})
                 {
-                    print FH " message=\"$message\"";
+                    print FH sprintf " time=\"%.2f\"", $test->{'duration'};
                 }
-                print FH ">";
-                my $output = $test->{'result_output'};
-                if ($output)
+                if ($test->{'result'} eq 'pass')
                 {
-                    # Escape any ]]> that might confuse the CDATA
-                    $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
-                    print FH "<![CDATA[${output}]]>\n";
+                    print FH " />\n";
                 }
-                print FH "      </$tag>\n";
-                print FH "    </testcase>\n";
+                else
+                {
+                    my $message = "$test->{'result'}: $test->{'result_message'}";
+                    print FH ">\n";
+                    my $tag = $result_tag_name{ $test->{'result'} };
+                    print FH "      <$tag";
+                    if ($has_message{ $test->{'result'} })
+                    {
+                        print FH " message=\"$message\"";
+                    }
+                    print FH ">";
+                    my $output = $test->{'result_output'};
+                    if ($output)
+                    {
+                        # Escape any ]]> that might confuse the CDATA
+                        $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
+                        print FH "<![CDATA[${output}]]>\n";
+                    }
+                    print FH "      </$tag>\n";
+                    print FH "    </testcase>\n";
+                }
             }
         }
         print FH "  </testsuite>\n";
@@ -1814,9 +1986,15 @@ sub readword
 {
     my ($cfd) = @_;
     my $word;
-    if (sysread($cfd->{'fh'}, $word, 4) != 4)
+    my $nread;
+    $nread = sysread($cfd->{'fh'}, $word, 4);
+    if (!defined $nread)
     {
-        die "Short read of word at offset " . (sysseek($cfd->{'fh'}, 0, 1));
+        die "Could not read word: $!";
+    }
+    if ($nread != 4)
+    {
+        die "Short read of word at offset " . (sysseek($cfd->{'fh'}, 0, 1)) . " (only $nread read)";
     }
     if ($cfd->{'reverse'})
     {
@@ -1917,6 +2095,7 @@ sub chunkfile
 {
     my ($filename) = @_;
     my $cf = binaryfile($filename);
+    #print("Opened binary file $filename\n");
     my $cfd = $cf->{'bfd'};
 
     $cf->{'MaxChunks'} = 0;
@@ -1924,6 +2103,7 @@ sub chunkfile
     $cf->{'chunks'} = [];
     $cf->{'chunknames'} = {};
 
+    #print("Read first word\n");
     my $word = readword($cfd);
     if ($word == $ChunkFileId)
     {
@@ -1933,6 +2113,7 @@ sub chunkfile
     {
         binary_bigend($cf);
     }
+    #print("  word was: $word\n");
 
     $cf->{'MaxChunks'} = readword($cfd);
     $cf->{'NumChunks'} = readword($cfd);
@@ -1942,6 +2123,7 @@ sub chunkfile
     for $n (0..$cf->{'MaxChunks'}-1)
     {
         my $chunkid = readfixedstring($cfd, 8);
+        #print("Chunk $n is $chunkid\n");
         my $fileoffset = readword($cfd);
         my $size = readword($cfd);
         my $chunk_header = {
@@ -2337,7 +2519,12 @@ sub text_check
                 || die "Cannot write actual output content '$native_expect-actual': $!";
             print FH $txt;
             close(FH);
-            return "Does not match expected text file (see $native_expect-actual)";
+            return ["Does not match expected text file (see $native_expect-actual)",
+                    sub {
+                        my ($indent) = @_;
+                        print "$indent ------ Expected file $arts->{'matches'}\n";
+                        diff($txt, $expected, $indent);
+                    }];
         }
         else
         {
@@ -2517,6 +2704,18 @@ sub binary_check
 
 # Execute in the directory requested
 # NOTE: On RISC OS, this is destructive, as there is only one CWD.
+my $oldroot;
+if ($^O eq 'riscos')
+{
+    # Remember the PWD - it's called `\` on RISC OS
+    $oldroot = '\\';
+}
+else
+{
+    $oldroot = `pwd`;
+    chomp($oldroot);
+    $oldroot .= '/';
+}
 chdir "$dir";
 my $filtereddir = $dir;
 while ($filtereddir =~ s!\.\./[^./][^./][^/]+!!)
@@ -2540,8 +2739,15 @@ if ($^O eq 'riscos')
 }
 else
 {
-    $rootdir = '../' x scalar(@dirparts);
-    $rootdir = './' if ($rootdir eq '');
+    if ($dir =~ m!^/!)
+    {
+        $rootdir = $oldroot;
+    }
+    else
+    {
+        $rootdir = '../' x scalar(@dirparts);
+        $rootdir = './' if ($rootdir eq '');
+    }
 }
 
 
@@ -2564,6 +2770,8 @@ for $group (@groups)
         $skip += $group->{'skip'};
         next;
     }
+    # Remember when this group was started
+    $group->{'timestamp'} = time();
     print "$group->{'group'}:\n";
     $group->{'skip'} = 0;
     for $test (@{ $group->{'tests'} })
