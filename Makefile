@@ -4,6 +4,12 @@ SHELL = /bin/bash
 PYTHON ?= python
 VENV ?= venv-${PYTHON}
 
+ifeq (${PYTHON},python2)
+VIRTUALENV = virtualenv2
+else
+VIRTUALENV = virtualenv
+endif
+
 IN_VENV = source "${VENV}/bin/activate" &&
 
 OUTPUT_FORMAT = --show-diff
@@ -17,7 +23,7 @@ artifacts:
 
 ${VENV}/marker:
 	-rm -rf "${VENV}"
-	virtualenv -p "${PYTHON}" "${VENV}"
+	${VIRTUALENV} -p "${PYTHON}" "${VENV}"
 	source "${VENV}/bin/activate" && pip install -r requirements-test.txt
 	touch "${VENV}/marker"
 
