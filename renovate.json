@@ -1,0 +1,12 @@
+{
+    "packageRules": [
+        {
+            "description": "coverage 5.5 is the last release for Python 2.7, which the Python 2.7 tests still use",
+            "matchPackageNames": [
+                "coverage"
+            ],
+            "matchCurrentValue": "==5.5",
+            "enabled": false
+        }
+    ]
+}
